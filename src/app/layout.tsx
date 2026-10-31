@@ -5,6 +5,11 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Digital Dark Spot | Research with the gaps in view",
   description: "Map a research question to evidence, missing information and the next things to verify.",
+  icons: {
+    icon: "/digital-dark-spot-logo.png",
+    shortcut: "/digital-dark-spot-logo.png",
+    apple: "/digital-dark-spot-logo.png",
+  },
 };
 
 // Per-request CSP nonces require request-time HTML rather than static script tags.

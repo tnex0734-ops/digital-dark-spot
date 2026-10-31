@@ -175,6 +175,8 @@ src/
     demo-data.ts                        Fictional scholarship example
     storage-keys.ts                     Versioned sessionStorage keys
   proxy.ts                              Per-request CSP nonce
+public/
+  digital-dark-spot-logo.png           Site logo and browser icon
 tests/
   analysis.test.ts                      Analysis behavior tests
   components.test.tsx                   React component tests
