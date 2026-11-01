@@ -15,6 +15,7 @@ export interface ResearchRequest {
   requirements?: string[];
   manualUrls?: string[];
   acceptLanguage?: string | null;
+  previousContext?: { query: string; topic?: string };
 }
 
 export class ResearchOrchestrator {
@@ -31,7 +32,7 @@ export class ResearchOrchestrator {
       throw new Error("Question must be at least 8 characters long.");
     }
 
-    const intent = inferIntent(question);
+    const intent = inferIntent(question, request.previousContext);
     const requirements = request.requirements?.length
       ? requirementsFromLabels(request.requirements, intent.category)
       : intent.requirements;

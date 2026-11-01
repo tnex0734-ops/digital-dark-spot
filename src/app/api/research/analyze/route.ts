@@ -11,6 +11,12 @@ const InputSchema = z
     requirements: z.array(z.string().trim().min(1).max(160)).min(1).max(12).optional(),
     manualUrls: z.array(z.string().trim().min(1).max(2048)).max(5).optional(),
     urls: z.array(z.string().trim().min(1).max(2048)).max(5).optional(),
+    previousContext: z
+      .object({
+        query: z.string().max(2000),
+        topic: z.string().max(200).optional(),
+      })
+      .optional(),
   })
   .strict();
 

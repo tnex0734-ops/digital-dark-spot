@@ -2,379 +2,455 @@ import type { IntentCategory, Requirement } from "./schema";
 
 export interface IntentSuggestion {
   category: IntentCategory;
+  categories: IntentCategory[];
   summary: string;
   timeSensitivity: "high" | "medium" | "low";
   timeReason: string;
   highStakes: boolean;
   topic: string;
+  resolvedQuery: string;
   requirements: Requirement[];
   queries: string[];
 }
 
 type RequirementTemplate = Omit<Requirement, "id"> & { id: string };
 
-const templates: Record<IntentCategory, RequirementTemplate[]> = {
+const domainTemplates: Partial<Record<IntentCategory, RequirementTemplate[]>> = {
   scholarship: [
     {
       id: "eligibility",
-      title: "Eligibility criteria",
-      reason: "Check who can apply, citizenship, GPA, and enrollment thresholds.",
+      title: "Eligibility criteria & thresholds",
+      reason: "Check who can apply, residency/enrolment requirements, and GPA thresholds.",
       sourceType: "Current official scholarship notice",
-      keywords: ["eligible", "eligibility", "applicant", "criteria", "residency", "enrolment", "gpa", "income"],
+      keywords: ["eligible", "eligibility", "criteria", "threshold", "qualify", "gpa", "enrolment"],
       impact: 3,
       timeSensitivity: "high",
-      searchIntent: "current official eligibility criteria",
-    },
-    {
-      id: "award-amount",
-      title: "Award amount and duration",
-      reason: "Confirm the financial funding amount, coverage period, and renewal terms.",
-      sourceType: "Current official award terms",
-      keywords: ["award", "amount", "funding", "stipend", "renewal", "duration", "tuition"],
-      impact: 2,
-      timeSensitivity: "medium",
-      searchIntent: "award amount duration funding",
-    },
-    {
-      id: "required-documents",
-      title: "Required documents",
-      reason: "Identify transcripts, recommendation letters, essays, and proof needed.",
-      sourceType: "Current application checklist",
-      keywords: ["document", "transcript", "recommendation", "letter", "proof", "required", "essay"],
-      impact: 3,
-      timeSensitivity: "high",
-      searchIntent: "required documents application checklist notification",
+      searchIntent: "official scholarship eligibility criteria",
     },
     {
       id: "deadline",
-      title: "Current deadline and application cycle",
-      reason: "Application deadlines and cycle dates change annually.",
-      sourceType: "Current official scholarship notice",
-      keywords: ["deadline", "closing", "due date", "application period", "cycle", "cutoff"],
+      title: "Current application deadline",
+      reason: "Cutoff dates vary by application cycle and must be verified for the active year.",
+      sourceType: "Current official notice",
+      keywords: ["deadline", "closing", "due date", "cutoff", "cycle"],
+      impact: 3,
+      timeSensitivity: "high",
+      searchIntent: "current scholarship application deadline official",
+    },
+    {
+      id: "required-documents",
+      title: "Required documents & proof",
+      reason: "Verify all transcripts, essays, recommendation letters, and submission formats.",
+      sourceType: "Current application checklist",
+      keywords: ["document", "transcript", "proof", "recommendation", "letter", "required"],
+      impact: 3,
+      timeSensitivity: "high",
+      searchIntent: "required documents scholarship checklist",
+    },
+    {
+      id: "award-amount",
+      title: "Award amount & duration",
+      reason: "Confirm financial award scope, duration, and whether it covers tuition or stipend.",
+      sourceType: "Current official award terms",
+      keywords: ["award", "amount", "funding", "stipend", "renewal", "duration"],
+      impact: 2,
+      timeSensitivity: "medium",
+      searchIntent: "scholarship award amount stipend details",
+    },
+    {
+      id: "renewal",
+      title: "Renewal & maintenance conditions",
+      reason: "Check whether continuation requires a minimum GPA, full-time credits, or reapplication.",
+      sourceType: "Official award terms",
+      keywords: ["renewal", "maintain", "continued funding", "gpa renewal"],
+      impact: 2,
+      timeSensitivity: "medium",
+      searchIntent: "scholarship renewal conditions requirements",
+    },
+    {
+      id: "application-steps",
+      title: "Application submission process",
+      reason: "Understand the portal, forms, and submission sequence.",
+      sourceType: "Official application instructions",
+      keywords: ["apply", "application", "portal", "submit", "steps"],
+      impact: 2,
+      timeSensitivity: "high",
+      searchIntent: "scholarship application procedure steps",
+    },
+    {
+      id: "official-link",
+      title: "Official programme portal link",
+      reason: "Verify legitimate application domain before submitting personal details.",
+      sourceType: "Official programme website",
+      keywords: ["portal", "official website", "application link"],
+      impact: 3,
+      timeSensitivity: "low",
+      searchIntent: "official scholarship programme portal website",
+    },
+  ],
+  application_or_eligibility: [
+    {
+      id: "eligibility-rules",
+      title: "Core eligibility criteria & thresholds",
+      reason: "Establish who qualifies, prerequisite conditions, and explicit thresholds.",
+      sourceType: "Current official notice or terms",
+      keywords: ["eligible", "eligibility", "criteria", "qualify", "threshold", "residency", "enrolment"],
+      impact: 3,
+      timeSensitivity: "high",
+      searchIntent: "official eligibility criteria requirements",
+    },
+    {
+      id: "required-docs",
+      title: "Required documentation & proof",
+      reason: "List evidentiary documents, certificates, and submission formats required.",
+      sourceType: "Official application checklist",
+      keywords: ["document", "transcript", "proof", "certificate", "id", "required", "letter"],
+      impact: 3,
+      timeSensitivity: "high",
+      searchIntent: "required documents submission checklist",
+    },
+    {
+      id: "cycle-deadline",
+      title: "Current cycle deadline & timeline",
+      reason: "Application cutoff dates change annually and must be confirmed for the active cycle.",
+      sourceType: "Current official notice",
+      keywords: ["deadline", "closing", "due date", "cutoff", "cycle", "period", "timeline"],
       impact: 3,
       timeSensitivity: "high",
       searchIntent: "current application deadline cycle official",
     },
     {
-      id: "renewal",
-      title: "Renewal conditions",
-      reason: "Determine GPA, credits, or performance standards required for ongoing support.",
-      sourceType: "Official award conditions",
-      keywords: ["renewal", "renew", "continued funding", "maintain", "subsequent years"],
+      id: "renewal-exceptions",
+      title: "Renewal terms, conditions & exceptions",
+      reason: "Check ongoing maintenance requirements, GPA thresholds, and exemptions.",
+      sourceType: "Official award terms",
+      keywords: ["renewal", "maintain", "exception", "waiver", "continued funding", "disqualification"],
       impact: 2,
       timeSensitivity: "medium",
-      searchIntent: "official renewal conditions academic progress",
-    },
-    {
-      id: "official-procedure",
-      title: "Application steps and official portal",
-      reason: "Verify where and how to submit through authorized channels.",
-      sourceType: "Official application instructions",
-      keywords: ["apply", "application", "submit", "procedure", "steps", "portal", "website"],
-      impact: 2,
-      timeSensitivity: "medium",
-      searchIntent: "official application procedure portal submit",
-    },
-  ],
-  eligibility: [
-    {
-      id: "eligibility-criteria",
-      title: "Core eligibility thresholds",
-      reason: "Identify baseline qualifying criteria, income limits, or prerequisite conditions.",
-      sourceType: "Current official eligibility rules",
-      keywords: ["eligible", "eligibility", "criteria", "qualify", "threshold", "income", "age"],
-      impact: 3,
-      timeSensitivity: "medium",
-      searchIntent: "official qualifying criteria thresholds",
-    },
-    {
-      id: "exceptions",
-      title: "Exceptions, exclusions, and waivers",
-      reason: "Check whether special circumstances disqualify or exempt applicants.",
-      sourceType: "Official rules and exceptions",
-      keywords: ["exception", "exclusion", "unless", "waiver", "ineligible", "disqualified"],
-      impact: 3,
-      timeSensitivity: "medium",
-      searchIntent: "official eligibility exclusions exceptions waiver",
-    },
-    {
-      id: "supporting-documents",
-      title: "Supporting verification documents",
-      reason: "List evidentiary documents required to demonstrate qualification.",
-      sourceType: "Official documentation guide",
-      keywords: ["document", "proof", "evidence", "transcript", "record", "verification"],
-      impact: 2,
-      timeSensitivity: "low",
-      searchIntent: "required verification documents proof",
-    },
-    {
-      id: "decision-timing",
-      title: "Review process and notification dates",
-      reason: "Confirm expected processing timelines and decision notices.",
-      sourceType: "Official programme page",
-      keywords: ["date", "deadline", "review", "decision", "process", "timeline"],
-      impact: 2,
-      timeSensitivity: "medium",
-      searchIntent: "review process decision dates timeline",
-    },
-  ],
-  policy: [
-    {
-      id: "policy-authority",
-      title: "Issuing authority and jurisdiction",
-      reason: "Confirm the governing body, legal jurisdiction, and applicable department.",
-      sourceType: "Official policy source",
-      keywords: ["authority", "issued", "scope", "applies", "jurisdiction", "department", "agency"],
-      impact: 3,
-      timeSensitivity: "low",
-      searchIntent: "official issuing authority jurisdiction scope",
-    },
-    {
-      id: "effective-date",
-      title: "Effective date and version status",
-      reason: "A newer amendment, version, or circular may supersede earlier rules.",
-      sourceType: "Current official policy page",
-      keywords: ["effective", "updated", "version", "current", "date", "supersedes", "amended"],
-      impact: 3,
-      timeSensitivity: "high",
-      searchIntent: "current effective date updated version status",
-    },
-    {
-      id: "policy-requirements",
-      title: "Obligations, rules, and exemptions",
-      reason: "Capture the substantive requirements, operational duties, and exemptions.",
-      sourceType: "Policy text and official guidance",
-      keywords: ["requirement", "must", "exception", "condition", "rule", "duty", "prohibited"],
-      impact: 3,
-      timeSensitivity: "medium",
-      searchIntent: "official policy requirements rules exemptions",
-    },
-    {
-      id: "policy-process",
-      title: "Compliance, submission, and appeals",
-      reason: "Identify compliance pathways, review channels, and grievance mechanisms.",
-      sourceType: "Official procedural guidance",
-      keywords: ["process", "review", "appeal", "contact", "submit", "compliance", "dispute"],
-      impact: 2,
-      timeSensitivity: "medium",
-      searchIntent: "official compliance procedure review appeal",
+      searchIntent: "official renewal conditions academic progress terms",
     },
   ],
   comparison: [
     {
       id: "comparison-scope",
-      title: "Comparable models and baseline specifications",
-      reason: "Ensure devices or options are evaluated on equivalent hardware and software terms.",
-      sourceType: "Manufacturer specifications and technical sheets",
-      keywords: ["version", "model", "specification", "variant", "generation", "hardware"],
+      title: "Scope & baseline comparison",
+      reason: "Establish the exact scope, target audience, and architecture being compared.",
+      sourceType: "Official technical documentation or specifications",
+      keywords: ["specification", "model", "scope", "architecture", "overview", "comparison"],
       impact: 2,
-      timeSensitivity: "medium",
-      searchIntent: "technical specifications sheet comparison",
+      timeSensitivity: "low",
+      searchIntent: "specifications overview comparison",
     },
     {
       id: "key-attributes",
-      title: "Performance, display, and core metrics",
-      reason: "Compare primary attributes like processor, battery life, screen, and cameras.",
-      sourceType: "Public benchmarks and manufacturer documentation",
-      keywords: ["processor", "battery", "display", "camera", "performance", "benchmark", "weight"],
-      impact: 2,
-      timeSensitivity: "low",
-      searchIntent: "performance battery display benchmark comparison",
+      title: "Key attributes & feature matrix",
+      reason: "Compare specifications, performance benchmarks, battery, or runtime metrics.",
+      sourceType: "Public benchmarks & technical reviews",
+      keywords: ["specifications", "performance", "battery", "features", "attributes", "benchmarks"],
+      impact: 3,
+      timeSensitivity: "medium",
+      searchIntent: "specifications benchmarks feature comparison",
     },
     {
-      id: "pricing-availability",
-      title: "Pricing, configurations, and warranties",
-      reason: "Account for storage tiers, base price, regional variants, and support terms.",
-      sourceType: "Official pricing and product terms",
-      keywords: ["price", "cost", "configuration", "warranty", "available", "msrp"],
+      id: "tradeoffs-limitations",
+      title: "Trade-offs, pricing & ecosystem",
+      reason: "Identify trade-offs, pricing differences, limitations, and user considerations.",
+      sourceType: "Comparative analyses & expert reviews",
+      keywords: ["tradeoff", "pricing", "cost", "limitation", "ecosystem", "drawback"],
       impact: 2,
       timeSensitivity: "medium",
-      searchIntent: "official pricing configurations warranty comparison",
-    },
-    {
-      id: "differentials",
-      title: "Key differentiators and trade-offs",
-      reason: "Examine direct trade-offs and verified technical differences.",
-      sourceType: "Independent technical reviews and teardowns",
-      keywords: ["difference", "advantage", "drawback", "limitation", "tradeoff", "versus"],
-      impact: 2,
-      timeSensitivity: "low",
-      searchIntent: "differences advantages trade-offs comparison",
+      searchIntent: "trade-offs limitations pricing review",
     },
   ],
   academic: [
     {
-      id: "scientific-breakthroughs",
-      title: "Recent technical developments and findings",
-      reason: "Identify empirical findings, material discoveries, and published breakthroughs.",
-      sourceType: "Peer-reviewed literature and scholarly journals",
-      keywords: ["development", "advancement", "breakthrough", "findings", "synthesis", "study"],
+      id: "research-state",
+      title: "Current state of research & evidence",
+      reason: "Establish empirical consensus and published scientific findings.",
+      sourceType: "Peer-reviewed literature & review journals",
+      keywords: ["study", "evidence", "findings", "consensus", "experiments", "data", "developments"],
       impact: 3,
-      timeSensitivity: "high",
-      searchIntent: "recent developments advances research findings",
+      timeSensitivity: "medium",
+      searchIntent: "recent research developments findings literature review",
     },
     {
-      id: "methodology-materials",
-      title: "Mechanisms, materials, and architectures",
-      reason: "Examine chemical compositions, electrolyte architectures, and experimental setups.",
-      sourceType: "Academic research papers and technical reviews",
-      keywords: ["material", "electrolyte", "mechanism", "architecture", "composition", "conductivity"],
+      id: "research-challenges",
+      title: "Key bottlenecks & open questions",
+      reason: "Highlight technical bottlenecks, contradictory theories, and unanswered gaps.",
+      sourceType: "Academic roadmaps & expert reviews",
+      keywords: ["challenge", "bottleneck", "unanswered", "gap", "barrier", "unresolved"],
+      impact: 3,
+      timeSensitivity: "medium",
+      searchIntent: "open challenges research gaps future roadmap",
+    },
+    {
+      id: "commercial-maturity",
+      title: "Commercialization & technology readiness level (TRL)",
+      reason: "Distinguish lab-scale prototypes from commercially viable production.",
+      sourceType: "Industry reports & roadmap papers",
+      keywords: ["commercialization", "readiness", "production", "scale", "timeline", "market"],
       impact: 2,
-      timeSensitivity: "low",
-      searchIntent: "materials architecture mechanisms technical review",
-    },
-    {
-      id: "performance-metrics",
-      title: "Benchmark performance and operational limits",
-      reason: "Check energy density, cycle life, stability, temperature limits, and degradation.",
-      sourceType: "Published experimental results and benchmarks",
-      keywords: ["density", "cycle life", "stability", "efficiency", "degradation", "temperature", "impedance"],
-      impact: 3,
       timeSensitivity: "medium",
-      searchIntent: "energy density cycle life stability performance benchmarks",
-    },
-    {
-      id: "unanswered-questions",
-      title: "Open challenges and research gaps",
-      reason: "Highlight scaling bottlenecks, interface resistance, and unresolved questions.",
-      sourceType: "Scholarly roadmaps and review articles",
-      keywords: ["challenge", "bottleneck", "unanswered", "gap", "future", "commercialization", "barrier"],
-      impact: 3,
-      timeSensitivity: "medium",
-      searchIntent: "key challenges open questions commercialization roadmap",
+      searchIntent: "commercialization readiness timeline production",
     },
   ],
-  general: [
+  research_question: [
     {
-      id: "core-findings",
-      title: "Core claims and evidence",
-      reason: "Establish the primary verifiable statements and their empirical backing.",
-      sourceType: "Authoritative primary sources",
-      keywords: ["evidence", "study", "report", "result", "claim", "finding", "overview"],
-      impact: 2,
-      timeSensitivity: "low",
-      searchIntent: "overview evidence findings primary sources",
-    },
-    {
-      id: "context-scope",
-      title: "Context, conditions, and applicability",
-      reason: "Determine who, where, and under what conditions the facts hold true.",
-      sourceType: "Primary source documentation",
-      keywords: ["scope", "applies", "condition", "region", "period", "context", "background"],
-      impact: 2,
-      timeSensitivity: "low",
-      searchIntent: "context scope conditions background",
-    },
-    {
-      id: "freshness-evolution",
-      title: "Freshness and validity over time",
-      reason: "Distinguish historical context from current conditions or active guidance.",
-      sourceType: "Recent authoritative sources",
-      keywords: ["current", "date", "updated", "recent", "trend", "status"],
-      impact: 2,
+      id: "research-state",
+      title: "Current state of research & evidence",
+      reason: "Establish empirical consensus and published scientific findings.",
+      sourceType: "Peer-reviewed literature & review journals",
+      keywords: ["study", "evidence", "findings", "consensus", "experiments", "data"],
+      impact: 3,
       timeSensitivity: "medium",
-      searchIntent: "current status updates recent timeline",
+      searchIntent: "recent research findings evidence review",
     },
     {
-      id: "unanswered-aspects",
-      title: "Unanswered questions and information gaps",
-      reason: "Identify areas where available sources provide incomplete or ambiguous data.",
-      sourceType: "Independent assessments and expert commentary",
-      keywords: ["unanswered", "unknown", "gap", "uncertainty", "disputed", "missing"],
+      id: "research-challenges",
+      title: "Key bottlenecks & open questions",
+      reason: "Highlight technical bottlenecks, contradictory theories, and unanswered gaps.",
+      sourceType: "Academic roadmaps & expert reviews",
+      keywords: ["challenge", "bottleneck", "unanswered", "gap", "barrier", "unresolved"],
+      impact: 3,
+      timeSensitivity: "medium",
+      searchIntent: "open challenges research gaps future roadmap",
+    },
+  ],
+  policy: [
+    {
+      id: "policy-eligibility",
+      title: "Statutory & regulatory eligibility criteria",
+      reason: "Determine mandated qualifications, income thresholds, or residency requirements.",
+      sourceType: "Official government policy notice",
+      keywords: ["eligibility", "statutory", "criteria", "subsidy", "qualify", "threshold"],
+      impact: 3,
+      timeSensitivity: "high",
+      searchIntent: "official policy statutory eligibility criteria",
+    },
+    {
+      id: "statutory-basis",
+      title: "Statutory authority & governing rules",
+      reason: "Establish the governing law, regulation code, or public subsidy policy schedule.",
+      sourceType: "Public register or legislative gazette",
+      keywords: ["statutory", "regulation", "law", "policy", "gazette", "authority"],
       impact: 2,
       timeSensitivity: "low",
-      searchIntent: "unanswered questions limitations knowledge gaps",
+      searchIntent: "statutory authority regulatory framework policy",
+    },
+  ],
+  general_explanation: [
+    {
+      id: "concept-core",
+      title: "Operating principles & definition",
+      reason: "Explain the fundamental mechanism and physical or logical laws involved.",
+      sourceType: "Authoritative reference & educational sources",
+      keywords: ["principle", "mechanism", "definition", "how it works", "process"],
+      impact: 2,
+      timeSensitivity: "low",
+      searchIntent: "operating principle mechanism explanation",
     },
   ],
 };
 
-const highStakesPattern =
-  /\b(legal|lawyer|medical|health|doctor|financial|investment|insurance|tax|immigration|visa|citizenship|asylum|employment eligibility|emergency|urgent|safety critical|lawsuit)\b/i;
-const deadlinePattern = /\b(deadline|due date|closing date|expires?|apply by|cutoff|submission date)\b/i;
-const academicPattern =
-  /\b(battery|solid-state|quantum|physics|chemistry|biology|material|algorithm|genome|paper|journal|breakthrough|developments in|unanswered questions|scientific|clinical|research on|nanotechnology)\b/i;
+const highStakesRegex =
+  /\b(medical|doctor|treatment|illness|disease|dosage|drug|legal|lawyer|court|lawsuit|immigration|visa|asylum|citizenship|tax|audit|financial advice|invest|investment|emergency|safety critical)\b/i;
+
+const pronounRegex = /\b(their|theirs|them|it|its|this|these|those)\b/i;
+
+export function resolveFollowUpContext(
+  currentQuery: string,
+  previousContext?: { query: string; topic?: string },
+): { resolvedQuery: string; topic: string } {
+  const query = currentQuery.trim();
+  if (!previousContext || !previousContext.topic) {
+    const topic = cleanTopic(query) || query.slice(0, 80);
+    return { resolvedQuery: query, topic };
+  }
+
+  const prevTopic = previousContext.topic;
+  if (pronounRegex.test(query)) {
+    // Replace pronoun reference with previous topic
+    let resolved = query;
+    if (/\btheir\b/i.test(resolved)) {
+      resolved = resolved.replace(/\btheir\b/gi, `${prevTopic}'s`);
+    } else if (/\bthem\b/i.test(resolved)) {
+      resolved = resolved.replace(/\bthem\b/gi, prevTopic);
+    } else if (/\bits\b/i.test(resolved)) {
+      resolved = resolved.replace(/\bits\b/gi, `${prevTopic}'s`);
+    } else if (/\bit\b/i.test(resolved)) {
+      resolved = resolved.replace(/\bit\b/gi, prevTopic);
+    }
+    const topic = `${prevTopic} (${cleanTopic(query)})`;
+    return { resolvedQuery: resolved, topic };
+  }
+
+  const topic = cleanTopic(query) || prevTopic;
+  return { resolvedQuery: query, topic };
+}
 
 function cleanTopic(query: string): string {
   return query
-    .replace(/^(what (is|are|should I verify before applying for|can I know about)|how (do I|to|can I)|tell me about|research on|compare|compare the latest publicly available specifications of)\s+/i, "")
+    .replace(
+      /^(what (is|are|should i verify before applying for|should i check before applying for|can i know about|were|do)|how (do i|to|can i|does a|does an|does)|tell me about|explain (how|what|the)|research on|compare|compare the latest publicly available specifications of|write a program to|write a python program to|summarize)\s+/i,
+      "",
+    )
+    .replace(/^(the\s+)?latest developments in\s+/i, "")
+    .replace(/^(the\s+)?official policy requirements for\s+/i, "")
+    .replace(/^(a\s+|an\s+|the\s+)/i, "")
     .replace(/[?!.]+$/, "")
     .trim()
     .slice(0, 100);
 }
 
-export function inferIntent(query: string): IntentSuggestion {
-  const lower = query.toLowerCase();
-  let category: IntentCategory = "general";
+export function inferIntent(
+  query: string,
+  previousContext?: { query: string; topic?: string },
+): IntentSuggestion {
+  const { resolvedQuery, topic } = resolveFollowUpContext(query, previousContext);
+  const lower = resolvedQuery.toLowerCase();
+  const categories: IntentCategory[] = [];
 
-  if (/\b(scholarship|grant|bursary|fellowship|tuition assistance|student aid)\b/.test(lower)) {
-    category = "scholarship";
-  } else if (/\b(compare|comparison|versus|\bvs\b|alternative|which is better|specifications of two)\b/.test(lower)) {
-    category = "comparison";
-  } else if (/\b(eligible|eligibility|qualify|qualification|who can apply)\b/.test(lower)) {
-    category = "eligibility";
-  } else if (/\b(policy|regulation|statute|law|rule|guideline|public service|official requirement)\b/.test(lower)) {
-    category = "policy";
-  } else if (academicPattern.test(lower)) {
-    category = "academic";
+  // Check categories with priority
+  if (/\b(compare|comparison|versus|\bvs\b|difference between|better than|alternative to)\b/.test(lower)) {
+    categories.push("comparison");
   }
 
-  const highStakes = highStakesPattern.test(query);
-  const hasDeadline = deadlinePattern.test(query);
-  const timeSensitivity =
-    hasDeadline || category === "scholarship"
+  if (/\b(scholarship|grant|bursary|fellowship|tuition assistance)\b/.test(lower)) {
+    categories.push("scholarship");
+    categories.push("application_or_eligibility");
+  }
+
+  if (/\b(solid-state battery|battery technology|scientific|research paper|breakthrough|peer-reviewed|academic|clinical trial)\b/.test(lower)) {
+    categories.push("academic");
+    categories.push("research_question");
+  }
+
+  if (/\b(policy|healthcare subsidy|government scheme|statutory|regulation|mandate)\b/.test(lower)) {
+    categories.push("policy");
+  }
+
+  if (/\b(python|javascript|typescript|c\+\+|rust|code|algorithm|binary search|sort a list|function|debugging|regex|sql|pointer|class|compile|syntax)\b/.test(lower)) {
+    categories.push("technical_help");
+  }
+
+  if (/\b(pros and cons|arguments for and against|advantages and disadvantages|benefits and drawbacks)\b/.test(lower)) {
+    categories.push("pros_cons");
+  }
+
+  if (/\b(how (to|do i|can i)|step-by-step|guide to|instructions for)\b/.test(lower)) {
+    categories.push("how_to");
+  }
+
+  if (/^(what is|define|definition of|meaning of)\b/.test(lower)) {
+    categories.push("definition");
+  }
+
+  if (/\b(admissions|apply for|application deadline|eligibility criteria)\b/.test(lower) && !categories.includes("scholarship")) {
+    categories.push("application_or_eligibility");
+  }
+
+  if (/\b(latest developments|recent updates|current status|new in 202|what happened|news on)\b/.test(lower) && !categories.includes("academic")) {
+    categories.push("current_information");
+  }
+
+  if (/\b(research|scientific|breakthrough|challenges in|unanswered questions|studies on|climate change)\b/.test(lower)) {
+    if (!categories.includes("academic") && !categories.includes("research_question")) {
+      categories.push("academic");
+      categories.push("research_question");
+    }
+  }
+
+  if (/\b(explain (how|why|what)|how does|mechanism of|principles of|causes and effects)\b/.test(lower)) {
+    categories.push("general_explanation");
+  }
+
+  if (highStakesRegex.test(lower)) {
+    categories.push("high_impact_information");
+  }
+
+  if (!categories.length) {
+    categories.push("unknown_or_mixed");
+  }
+
+  // Primary category selection
+  const primaryCategory = categories[0];
+
+  const highStakes = categories.includes("high_impact_information") || highStakesRegex.test(lower);
+  const timeSensitivity: "high" | "medium" | "low" =
+    categories.includes("scholarship") || categories.includes("application_or_eligibility") || categories.includes("current_information")
       ? "high"
-      : category === "policy" || category === "academic"
+      : categories.includes("academic") || categories.includes("research_question") || categories.includes("comparison")
         ? "medium"
         : "low";
 
   const timeReason =
     timeSensitivity === "high"
-      ? "Application cycles and official deadlines expire; verify current cycle dates before acting."
+      ? "Deadlines, cycles, or recent updates can change; verify active dates against official sources."
       : timeSensitivity === "medium"
-        ? "Technical developments or official policies update periodically; check effective publication dates."
-        : "No immediate expiration was detected; review date signals in discovered sources.";
+        ? "Technical developments and standards evolve over time; check publication dates."
+        : "Foundational conceptual knowledge; not strictly dependent on immediate calendar dates.";
 
-  const topic = cleanTopic(query) || query.slice(0, 80);
-  const reqTemplates = templates[category] || templates.general;
+  // Requirements generation based on domain
+  let reqTemplates: RequirementTemplate[] = [];
+  if (primaryCategory === "scholarship") {
+    reqTemplates = domainTemplates.scholarship || [];
+  } else if (primaryCategory === "application_or_eligibility") {
+    reqTemplates = domainTemplates.scholarship || domainTemplates.application_or_eligibility || [];
+  } else if (primaryCategory === "comparison" || primaryCategory === "pros_cons") {
+    reqTemplates = domainTemplates.comparison || [];
+  } else if (primaryCategory === "academic") {
+    reqTemplates = domainTemplates.academic || [];
+  } else if (primaryCategory === "research_question" || primaryCategory === "current_information") {
+    reqTemplates = domainTemplates.academic || domainTemplates.research_question || [];
+  } else if (primaryCategory === "policy") {
+    reqTemplates = domainTemplates.policy || [];
+  } else {
+    reqTemplates = domainTemplates.general_explanation || [];
+  }
+
   const requirements: Requirement[] = reqTemplates.map((t) => ({ ...t }));
 
-  // Generate 3 to 5 targeted queries derived directly from intent and topic
+  // Generate targeted queries
   const queries: string[] = [];
-
-  if (category === "scholarship") {
-    queries.push(`official ${topic} eligibility criteria requirements`);
+  if (primaryCategory === "scholarship") {
+    queries.push(`official ${topic} eligibility criteria`);
     queries.push(`${topic} application deadline cycle`);
     queries.push(`${topic} required documents checklist`);
-    queries.push(`official ${topic} renewal conditions award terms`);
-  } else if (category === "academic") {
-    queries.push(`recent developments in ${topic}`);
-    queries.push(`${topic} roadmap performance benchmarks`);
-    queries.push(`${topic} challenges open questions research`);
-  } else if (category === "comparison") {
-    queries.push(`${topic} technical specifications comparison`);
-    queries.push(`${topic} benchmarks display battery performance`);
-    queries.push(`${topic} official prices configurations comparison`);
-  } else if (category === "policy") {
-    queries.push(`official ${topic} requirements guidelines`);
-    queries.push(`${topic} current effective date latest version`);
-    queries.push(`${topic} issuing authority scope exceptions`);
-  } else if (category === "eligibility") {
-    queries.push(`official ${topic} eligibility criteria qualify`);
-    queries.push(`${topic} exceptions disqualifications requirements`);
-    queries.push(`${topic} required verification documents`);
+    queries.push(`${topic} terms award funding`);
+  } else if (primaryCategory === "academic") {
+    queries.push(`latest developments in ${topic}`);
+    queries.push(`${topic} research challenges advances`);
+    queries.push(`${topic} peer-reviewed scientific overview`);
+  } else if (primaryCategory === "comparison" || primaryCategory === "pros_cons") {
+    queries.push(`${topic} comparison review`);
+    queries.push(`${topic} performance benchmarks trade-offs`);
+  } else if (primaryCategory === "policy") {
+    queries.push(`official ${topic} eligibility requirements`);
+    queries.push(`${topic} government policy guidelines`);
+  } else if (primaryCategory === "technical_help") {
+    queries.push(`${topic} implementation documentation`);
+    queries.push(`${topic} complexity best practices`);
+  } else if (primaryCategory === "application_or_eligibility") {
+    queries.push(`official ${topic} eligibility criteria`);
+    queries.push(`${topic} application deadline cycle`);
+    queries.push(`${topic} required documents checklist`);
+  } else if (primaryCategory === "current_information" || primaryCategory === "research_question") {
+    queries.push(`latest developments in ${topic}`);
+    queries.push(`${topic} research challenges advances`);
   } else {
-    queries.push(`${topic} overview evidence`);
-    queries.push(`${topic} key findings analysis`);
-    queries.push(`${topic} open questions research`);
+    queries.push(`${topic} overview explanation`);
+    queries.push(`${topic} mechanism principles`);
   }
 
   return {
-    category,
-    summary: query.trim(),
+    category: primaryCategory,
+    categories,
+    summary: resolvedQuery,
     timeSensitivity,
     timeReason,
     highStakes,
     topic,
+    resolvedQuery,
     requirements,
     queries,
   };
@@ -388,8 +464,11 @@ export function requirementsFromLabels(labels: string[], category: IntentCategor
     .map((title, index) => ({
       id: `custom-${index + 1}-${title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 36) || "item"}`,
       title,
-      reason: "Requirement suggested for this review. Edit it to match your question.",
-      sourceType: category === "scholarship" ? "Current official scholarship source" : "Relevant primary source",
+      reason: "Information requirement defined for this research session.",
+      sourceType:
+        category === "application_or_eligibility" || category === "scholarship"
+          ? "Official primary notice"
+          : "Authoritative technical or reference source",
       keywords: title.toLowerCase().split(/\W+/).filter((word) => word.length > 2).slice(0, 10),
       impact: 2,
       timeSensitivity: "medium",

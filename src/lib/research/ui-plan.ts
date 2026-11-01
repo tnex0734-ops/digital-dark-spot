@@ -18,6 +18,12 @@ export const UIComponentTypeSchema = z.enum([
   "FollowUpResearchPanel",
   "IllustrationPanel",
   "ResearchLimitationsNotice",
+  "DirectAnswer",
+  "CodeBlock",
+  "ComparisonTable",
+  "StepByStepGuide",
+  "ProsConsPanel",
+  "RelatedQuestions",
 ]);
 
 export const UIPlanSchema = z
@@ -54,19 +60,36 @@ export function fallbackPlan(): UIPlan {
 export function buildUIPlan(result: ResearchResult): UIPlan {
   const category = result.intent.category;
   const layout =
-    category === "scholarship" || category === "eligibility"
+    category === "scholarship" || category === "application_or_eligibility" || category === "eligibility"
       ? "scholarship"
       : category === "comparison"
         ? "comparison"
-        : category === "academic"
+        : category === "academic" || category === "research_question"
           ? "academic"
-          : category === "policy"
+          : category === "policy" || category === "high_impact_information"
             ? "policy"
             : "research";
 
-  const components: UIPlan["components"] = [
-    { type: "ResearchSummary", dataIds: ["summary"] },
-  ];
+  const components: UIPlan["components"] = [];
+
+  // 1. Direct answer comes first whenever synthesized answer exists
+  if (result.answer) {
+    components.push({ type: "DirectAnswer", dataIds: ["answer"] });
+  }
+
+  // 2. Intent-specific code block or comparison table
+  if (result.answer?.code) {
+    components.push({ type: "CodeBlock", dataIds: ["code"] });
+  } else if (result.answer?.comparisonRows && result.answer.comparisonRows.length > 0 && layout !== "scholarship") {
+    components.push({ type: "ComparisonTable", dataIds: ["comparison"] });
+  } else if (result.answer?.steps && result.answer.steps.length > 0 && layout !== "scholarship") {
+    components.push({ type: "StepByStepGuide", dataIds: ["steps"] });
+  } else if (result.answer?.prosCons && layout !== "scholarship") {
+    components.push({ type: "ProsConsPanel", dataIds: ["proscons"] });
+  }
+
+  // 3. Research summary
+  components.push({ type: "ResearchSummary", dataIds: ["summary"] });
 
   if (layout === "scholarship") {
     components.push({ type: "CoverageOverview", dataIds: ["coverage"] });
@@ -285,7 +308,12 @@ export function buildUIPlan(result: ResearchResult): UIPlan {
     components.push({ type: "ResearchLimitationsNotice", dataIds: ["limitations"] });
   }
 
-  return { layout, components };
+  // Add RelatedQuestions at the bottom if available and room allows
+  if (result.relatedQuestions && result.relatedQuestions.length > 0 && components.length < 16) {
+    components.push({ type: "RelatedQuestions", dataIds: ["related"] });
+  }
+
+  return { layout, components: components.slice(0, 16) };
 }
 
 export function validateUIPlan(
@@ -302,6 +330,12 @@ export function validateUIPlan(
     "authority",
     "limitations",
     "progress",
+    "answer",
+    "code",
+    "comparison",
+    "steps",
+    "proscons",
+    "related",
     ...result.requirements.map((item) => item.id),
     ...result.sources.map((item) => item.id),
     ...result.claims.map((item) => item.id),

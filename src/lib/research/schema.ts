@@ -1,10 +1,24 @@
 import { z } from "zod";
 
 export const IntentCategorySchema = z.enum([
+  "general_explanation",
+  "current_information",
+  "research_question",
+  "comparison",
+  "how_to",
+  "definition",
+  "summarization",
+  "document_analysis",
+  "technical_help",
+  "calculation",
+  "pros_cons",
+  "application_or_eligibility",
+  "high_impact_information",
+  "unknown_or_mixed",
+  // Legacy / alias compatibility
   "scholarship",
   "eligibility",
   "policy",
-  "comparison",
   "academic",
   "general",
 ]);
@@ -51,6 +65,53 @@ export const SourceSchema = z.object({
     validFrom: z.string().datetime({ offset: true }).nullable(),
     validTo: z.string().datetime({ offset: true }).nullable(),
   }),
+});
+
+export const CitationSchema = z.object({
+  id: z.string().min(1).max(80),
+  sourceId: z.string().min(1).max(80),
+  label: z.string().min(1).max(40),
+  title: z.string().min(1).max(240),
+  url: z.string().url().max(2048).nullable(),
+  excerpt: z.string().max(1200).optional(),
+});
+
+export const ComparisonRowSchema = z.object({
+  attribute: z.string().min(1).max(120),
+  itemA: z.string().min(1).max(500),
+  itemB: z.string().min(1).max(500),
+  verdict: z.string().max(500).optional(),
+});
+
+export const StepGuideSchema = z.object({
+  step: z.number().int().min(1),
+  title: z.string().min(1).max(200),
+  description: z.string().min(1).max(1200),
+  warning: z.string().max(400).optional(),
+});
+
+export const DirectAnswerSchema = z.object({
+  headline: z.string().min(1).max(300),
+  directAnswer: z.string().min(1).max(4000),
+  keyPoints: z.array(z.string().min(1).max(600)).max(12),
+  detailedExplanation: z.string().max(10000).optional(),
+  code: z
+    .object({
+      language: z.string().max(40),
+      content: z.string().max(6000),
+      explanation: z.string().max(1200).optional(),
+    })
+    .optional(),
+  steps: z.array(StepGuideSchema).max(12).optional(),
+  comparisonRows: z.array(ComparisonRowSchema).max(20).optional(),
+  comparisonHeaders: z.tuple([z.string().max(80), z.string().max(80)]).optional(),
+  prosCons: z
+    .object({
+      pros: z.array(z.string().max(500)).max(10),
+      cons: z.array(z.string().max(500)).max(10),
+    })
+    .optional(),
+  conclusion: z.string().max(2000).optional(),
 });
 
 export const SearchSummarySchema = z.object({
@@ -119,28 +180,40 @@ export const FollowUpActionSchema = z.object({
   suggestedQuery: z.string().min(1).max(300),
 });
 
+export const ConversationTurnSchema = z.object({
+  query: z.string().max(2000),
+  summary: z.string().max(1000).optional(),
+  topic: z.string().max(200).optional(),
+  timestamp: z.string().datetime({ offset: true }),
+});
+
 export const ResearchResultSchema = z.object({
   version: z.literal(1),
   mode: z.enum(["demo", "web-search", "url"]),
   query: z.string().min(1).max(2000),
+  conversationId: z.string().max(80).optional(),
   createdAt: z.string().datetime({ offset: true }).optional(),
   search: SearchSummarySchema.optional(),
+  answer: DirectAnswerSchema.optional(),
+  citations: z.array(CitationSchema).max(30).optional(),
   intent: z.object({
     category: IntentCategorySchema,
+    categories: z.array(IntentCategorySchema).max(5).optional(),
     summary: z.string().min(1).max(320),
     timeSensitivity: z.enum(["high", "medium", "low"]),
     timeReason: z.string().min(1).max(320),
     highStakes: z.boolean(),
   }),
-  requirements: z.array(RequirementSchema).max(12),
+  requirements: z.array(RequirementSchema).max(16),
   discoveredSources: z.array(DiscoveredSourceSchema).max(50).optional(),
   discoveredSourceCount: z.number().int().min(0).max(100).optional(),
   sources: z.array(SourceSchema).max(50),
   claims: z.array(ClaimSchema).max(120),
-  coverage: z.array(RequirementCoverageSchema).max(12),
+  coverage: z.array(RequirementCoverageSchema).max(16),
   conflicts: z.array(ConflictSchema).max(40),
-  tasks: z.array(VerificationTaskSchema).max(12),
+  tasks: z.array(VerificationTaskSchema).max(16),
   followUpActions: z.array(FollowUpActionSchema).max(12).optional(),
+  relatedQuestions: z.array(z.string().min(1).max(200)).max(8).optional(),
   evidenceCoverage: z.object({
     withEvidence: z.number().int().min(0),
     denominator: z.number().int().min(0),
@@ -156,6 +229,8 @@ export type IntentCategory = z.infer<typeof IntentCategorySchema>;
 export type Requirement = z.infer<typeof RequirementSchema>;
 export type DiscoveredSource = z.infer<typeof DiscoveredSourceSchema>;
 export type Source = z.infer<typeof SourceSchema>;
+export type Citation = z.infer<typeof CitationSchema>;
+export type DirectAnswer = z.infer<typeof DirectAnswerSchema>;
 export type SearchSummary = z.infer<typeof SearchSummarySchema>;
 export type EvidenceClaim = z.infer<typeof ClaimSchema>;
 export type CoverageStatus = z.infer<typeof CoverageStatusSchema>;
@@ -163,4 +238,5 @@ export type RequirementCoverage = z.infer<typeof RequirementCoverageSchema>;
 export type PossibleConflict = z.infer<typeof ConflictSchema>;
 export type VerificationTask = z.infer<typeof VerificationTaskSchema>;
 export type FollowUpAction = z.infer<typeof FollowUpActionSchema>;
+export type ConversationTurn = z.infer<typeof ConversationTurnSchema>;
 export type ResearchResult = z.infer<typeof ResearchResultSchema>;

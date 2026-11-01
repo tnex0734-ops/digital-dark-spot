@@ -70,7 +70,11 @@ export function ResultsWorkspace() {
   }, [storedResultJson]);
 
   const executeResearch = useCallback(
-    async (queryText: string, customManualUrls?: string[]) => {
+    async (
+      queryText: string,
+      customManualUrls?: string[],
+      previousContext?: { query: string; topic?: string },
+    ) => {
       setLoading(true);
       setError(null);
       setStage(1);
@@ -98,6 +102,7 @@ export function ResultsWorkspace() {
           body: JSON.stringify({
             question: queryText,
             manualUrls: manualUrls.length ? manualUrls : undefined,
+            previousContext,
           }),
         });
 
@@ -167,7 +172,10 @@ export function ResultsWorkspace() {
   }
 
   function handleFollowUp(action: FollowUpAction) {
-    executeResearch(action.suggestedQuery);
+    const prevContext = cachedResult
+      ? { query: cachedResult.query, topic: cachedResult.intent.summary }
+      : undefined;
+    executeResearch(action.suggestedQuery, undefined, prevContext);
   }
 
   function retryWithManualUrls(e: React.FormEvent) {

@@ -1,5 +1,7 @@
 import type {
+  Citation,
   CoverageStatus,
+  DirectAnswer,
   DiscoveredSource,
   EvidenceClaim,
   FollowUpAction,
@@ -12,6 +14,7 @@ import type {
   VerificationTask,
 } from "./schema";
 import { inferIntent } from "./intent";
+import { synthesizeAnswer } from "./answer-engine";
 
 export const SOURCE_RANKING_WEIGHTS = {
   relevance: 0.35,
@@ -243,7 +246,11 @@ export function generateFollowUpActions(
 export function buildResearchResult(input: {
   mode: "demo" | "web-search" | "url";
   query: string;
+  conversationId?: string;
   search?: SearchSummary;
+  answer?: DirectAnswer;
+  citations?: Citation[];
+  relatedQuestions?: string[];
   requirements: Requirement[];
   sources: Source[];
   discoveredSources?: DiscoveredSource[];
@@ -257,6 +264,20 @@ export function buildResearchResult(input: {
     classifyCoverage(requirement, input.claims, conflicts),
   );
   const withEvidence = coverage.filter((item) => item.claimIds.length > 0).length;
+
+  const answerPayload = input.answer
+    ? {
+        answer: input.answer,
+        citations: input.citations || [],
+        relatedQuestions: input.relatedQuestions || [],
+      }
+    : synthesizeAnswer({
+        query: input.query,
+        topic: intent.topic,
+        category: intent.category,
+        sources: input.sources,
+        claims: input.claims,
+      });
 
   const priorityOrder = { high: 0, medium: 1, low: 2 } as const;
   const tasks: VerificationTask[] = coverage
@@ -303,10 +324,15 @@ export function buildResearchResult(input: {
     version: 1,
     mode: input.mode,
     query: input.query,
+    conversationId: input.conversationId,
     createdAt: input.createdAt || new Date().toISOString(),
     ...(input.search ? { search: input.search } : {}),
+    answer: answerPayload.answer,
+    citations: answerPayload.citations,
+    relatedQuestions: answerPayload.relatedQuestions,
     intent: {
       category: intent.category,
+      categories: intent.categories,
       summary: input.query,
       timeSensitivity: intent.timeSensitivity,
       timeReason: intent.timeReason,

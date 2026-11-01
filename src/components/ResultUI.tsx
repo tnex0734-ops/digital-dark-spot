@@ -1074,6 +1074,281 @@ export function ResearchProgress({
   );
 }
 
+// 17. DirectAnswerPanel
+function DirectAnswerPanel({ result, onOpenSource }: RegistryProps) {
+  const answer = result.answer;
+  if (!answer) return null;
+
+  return (
+    <section className="result-section direct-answer-panel" aria-labelledby="direct-answer-heading">
+      <div className="section-heading">
+        <div>
+          <span className="eyebrow">Direct Synthesis · Evidence First</span>
+          <h2 id="direct-answer-heading">{answer.headline}</h2>
+        </div>
+        <span className="answer-badge">Verified Analysis</span>
+      </div>
+
+      <div className="direct-answer-lead">
+        <p className="lead-paragraph">{answer.directAnswer}</p>
+      </div>
+
+      {answer.keyPoints && answer.keyPoints.length > 0 && (
+        <div className="answer-keypoints">
+          <h3 className="keypoints-title">Key Takeaways</h3>
+          <ul className="keypoints-list">
+            {answer.keyPoints.map((point, idx) => (
+              <li key={idx} className="keypoint-item">
+                <span className="keypoint-marker" aria-hidden="true">
+                  <Check size={14} />
+                </span>
+                <span>{point}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {answer.detailedExplanation && (
+        <details className="answer-deep-dive">
+          <summary>Detailed Technical Explanation</summary>
+          <div className="deep-dive-content">
+            <p>{answer.detailedExplanation}</p>
+          </div>
+        </details>
+      )}
+
+      {result.citations && result.citations.length > 0 && (
+        <div className="answer-citations-footer">
+          <span className="citations-label">Sources Cited:</span>
+          <div className="citations-pills">
+            {result.citations.map((cite) => {
+              const src = result.sources.find((s) => s.id === cite.sourceId);
+              return (
+                <button
+                  key={cite.id}
+                  type="button"
+                  className="citation-pill"
+                  onClick={() => src && onOpenSource(src)}
+                  title={`Inspect source: ${cite.title}`}
+                >
+                  <span className="cite-num">{cite.label}</span>
+                  <span className="cite-title">{cite.title}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+// 18. CodeBlockPanel
+function CodeBlockPanel({ result }: RegistryProps) {
+  const code = result.answer?.code;
+  const [copied, setCopied] = useState(false);
+  if (!code) return null;
+
+  function copyCode() {
+    if (code && typeof navigator !== "undefined" && navigator.clipboard) {
+      navigator.clipboard.writeText(code.content);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  }
+
+  return (
+    <section className="result-section code-block-panel" aria-labelledby="code-block-heading">
+      <div className="code-header">
+        <div className="code-meta">
+          <span className="code-lang-tag">{code.language.toUpperCase()}</span>
+          <h3 id="code-block-heading">Implementation & Example</h3>
+        </div>
+        <button
+          type="button"
+          className="button button-quiet button-small copy-button"
+          onClick={copyCode}
+          aria-label="Copy code to clipboard"
+        >
+          {copied ? (
+            <>
+              <Check size={14} aria-hidden="true" /> Copied!
+            </>
+          ) : (
+            <>Copy Code</>
+          )}
+        </button>
+      </div>
+      <div className="code-container">
+        <pre tabIndex={0}>
+          <code>{code.content}</code>
+        </pre>
+      </div>
+      {code.explanation && <p className="code-explanation">{code.explanation}</p>}
+    </section>
+  );
+}
+
+// 19. ComparisonTablePanel
+function ComparisonTablePanel({ result }: RegistryProps) {
+  const rows = result.answer?.comparisonRows;
+  const headers = result.answer?.comparisonHeaders || ["Feature / Metric", "Item A", "Item B"];
+  if (!rows || rows.length === 0) return null;
+
+  return (
+    <section className="result-section comparison-table-panel" aria-labelledby="comparison-heading">
+      <div className="section-heading">
+        <div>
+          <span className="eyebrow">Structured Comparison</span>
+          <h2 id="comparison-heading">Direct Feature & Specification Matrix</h2>
+        </div>
+        <span className="section-count">{rows.length} compared attributes</span>
+      </div>
+      <div className="comparison-table-wrap">
+        <table className="comparison-matrix-table">
+          <thead>
+            <tr>
+              <th>{headers[0]}</th>
+              <th>{headers[1]}</th>
+              <th>{headers[2] || "Comparison / Verdict"}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, index) => (
+              <tr key={index}>
+                <td className="attribute-cell">
+                  <strong>{row.attribute}</strong>
+                </td>
+                <td className="item-cell item-a">{row.itemA}</td>
+                <td className="item-cell item-b">
+                  <span>{row.itemB}</span>
+                  {row.verdict && <span className="verdict-tag">{row.verdict}</span>}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+// 20. StepByStepGuidePanel
+function StepByStepGuidePanel({ result }: RegistryProps) {
+  const steps = result.answer?.steps;
+  if (!steps || steps.length === 0) return null;
+
+  return (
+    <section className="result-section steps-guide-panel" aria-labelledby="steps-guide-heading">
+      <div className="section-heading">
+        <div>
+          <span className="eyebrow">Actionable Workflow</span>
+          <h2 id="steps-guide-heading">Step-by-Step Guide</h2>
+        </div>
+        <span className="section-count">{steps.length} sequential steps</span>
+      </div>
+      <ol className="steps-list">
+        {steps.map((step) => (
+          <li key={step.step} className="step-card">
+            <div className="step-badge">{step.step}</div>
+            <div className="step-body">
+              <h3 className="step-title">{step.title}</h3>
+              <p className="step-desc">{step.description}</p>
+              {step.warning && (
+                <div className="step-caution" role="note">
+                  <AlertTriangle size={15} aria-hidden="true" />
+                  <span>{step.warning}</span>
+                </div>
+              )}
+            </div>
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
+}
+
+// 21. ProsConsComponent
+function ProsConsComponent({ result }: RegistryProps) {
+  const prosCons = result.answer?.prosCons;
+  if (!prosCons) return null;
+
+  return (
+    <section className="result-section pros-cons-panel" aria-labelledby="pros-cons-heading">
+      <div className="section-heading">
+        <div>
+          <span className="eyebrow">Balanced Evaluation</span>
+          <h2 id="pros-cons-heading">Arguments & Trade-offs</h2>
+        </div>
+      </div>
+      <div className="pros-cons-grid">
+        <div className="pros-column">
+          <div className="pros-header">
+            <span className="pros-icon" aria-hidden="true">✓</span>
+            <h3>Advantages & Strengths</h3>
+          </div>
+          <ul className="pros-list">
+            {prosCons.pros.map((pro, index) => (
+              <li key={index}>{pro}</li>
+            ))}
+          </ul>
+        </div>
+        <div className="cons-column">
+          <div className="cons-header">
+            <span className="cons-icon" aria-hidden="true">✕</span>
+            <h3>Disadvantages & Limitations</h3>
+          </div>
+          <ul className="cons-list">
+            {prosCons.cons.map((con, index) => (
+              <li key={index}>{con}</li>
+            ))}
+          </ul>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// 22. RelatedQuestionsPanel
+function RelatedQuestionsPanel({ result, onFollowUp }: RegistryProps) {
+  const questions = result.relatedQuestions;
+  if (!questions || questions.length === 0) return null;
+
+  return (
+    <section className="result-section related-questions-panel" aria-labelledby="related-heading">
+      <div className="section-heading">
+        <div>
+          <span className="eyebrow">Explore Next</span>
+          <h2 id="related-heading">Related Questions & Follow-ups</h2>
+        </div>
+      </div>
+      <p className="related-help">Click any query below to continue research seamlessly:</p>
+      <div className="related-questions-list">
+        {questions.map((q, idx) => (
+          <button
+            key={idx}
+            type="button"
+            className="related-question-btn"
+            onClick={() =>
+              onFollowUp?.({
+                id: `rel-${idx}`,
+                title: q,
+                description: `Investigate: ${q}`,
+                targetRequirementId: "followup",
+                suggestedQuery: q,
+              })
+            }
+          >
+            <span>{q}</span>
+            <ArrowUpRight size={15} aria-hidden="true" />
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function ChecklistPanel({ result, ids, checkedIds, onToggle }: RegistryProps) {
   const tasks = ids.length ? result.tasks.filter((item) => ids.includes(item.id)) : result.tasks;
   return <VerificationChecklist tasks={tasks} checkedIds={checkedIds} onToggle={onToggle} />;
@@ -1096,6 +1371,12 @@ const registry: Record<UIComponentType, (props: RegistryProps) => ReactNode> = {
   FollowUpResearchPanel,
   IllustrationPanel,
   ResearchLimitationsNotice,
+  DirectAnswer: DirectAnswerPanel,
+  CodeBlock: CodeBlockPanel,
+  ComparisonTable: ComparisonTablePanel,
+  StepByStepGuide: StepByStepGuidePanel,
+  ProsConsPanel: ProsConsComponent,
+  RelatedQuestions: RelatedQuestionsPanel,
 };
 
 export function AdaptiveResultsRenderer({
