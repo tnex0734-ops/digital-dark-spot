@@ -1,5 +1,18 @@
 import { z } from "zod";
 
+export const TaskTypeSchema = z.enum([
+  "factual_question",
+  "research_overview",
+  "comparison",
+  "current_information",
+  "requirements_check",
+  "how_to",
+  "policy_or_regulation",
+  "academic_research",
+  "decision_support",
+  "open_ended_topic",
+]);
+
 export const IntentCategorySchema = z.enum([
   "general_explanation",
   "current_information",
@@ -128,8 +141,12 @@ export const ClaimSchema = z.object({
   requirementIds: z.array(z.string().min(1).max(80)).min(1).max(12),
   statement: z.string().min(1).max(500),
   excerpt: z.string().min(1).max(1200),
-  method: z.enum(["illustrative", "keyword-match"]),
-  directness: z.enum(["direct", "partial"]),
+  method: z.enum(["illustrative", "keyword-match"]).optional(),
+  directness: z.enum(["direct", "partial"]).optional(),
+  evidenceProvenance: z
+    .enum(["page_excerpt", "search_snippet", "user_provided", "demo_fixture"])
+    .optional(),
+  supportStatus: z.enum(["supported", "partial", "uncertain"]).optional(),
   subject: z.string().max(160).optional(),
   attribute: z.string().max(120).optional(),
   value: z.string().max(160).optional(),
@@ -137,14 +154,19 @@ export const ClaimSchema = z.object({
   jurisdiction: z.string().max(100).optional(),
   condition: z.string().max(180).optional(),
   period: z.string().max(80).optional(),
+  publishedAt: z.string().datetime({ offset: true }).nullable().optional(),
+  modifiedAt: z.string().datetime({ offset: true }).nullable().optional(),
+  retrievedAt: z.string().datetime({ offset: true }).optional(),
 });
 
 export const CoverageStatusSchema = z.enum([
   "covered",
   "partial",
+  "partially_covered",
   "missing_in_reviewed_sources",
   "conflicting",
   "needs_verification",
+  "not_applicable",
 ]);
 
 export const RequirementCoverageSchema = z.object({
@@ -180,6 +202,30 @@ export const FollowUpActionSchema = z.object({
   suggestedQuery: z.string().min(1).max(300),
 });
 
+export const SearchQueryPlanSchema = z.object({
+  query: z.string().min(1).max(300),
+  purpose: z.string().max(200),
+  targetRequirementId: z.string().max(80).optional(),
+});
+
+export const IntentAnalysisSchema = z.object({
+  originalQuery: z.string().min(1).max(2000),
+  normalizedQuery: z.string().min(1).max(2000),
+  taskType: TaskTypeSchema,
+  domain: z.string().min(1).max(120),
+  topic: z.string().min(1).max(200),
+  entities: z.array(z.string().max(120)).max(20),
+  requestedTimeframe: z.string().max(120).optional(),
+  requiresCurrentInformation: z.boolean(),
+  userGoal: z.string().min(1).max(500),
+  informationRequirements: z.array(RequirementSchema).min(1).max(16),
+  searchQueries: z.array(SearchQueryPlanSchema).min(1).max(10),
+  assumptions: z.array(z.string().max(300)).max(10),
+  ambiguity: z.enum(["low", "medium", "high"]),
+  clarifyingQuestion: z.string().max(320).optional(),
+  provisionalInterpretation: z.string().max(400).optional(),
+});
+
 export const ConversationTurnSchema = z.object({
   query: z.string().max(2000),
   summary: z.string().max(1000).optional(),
@@ -199,6 +245,12 @@ export const ResearchResultSchema = z.object({
   intent: z.object({
     category: IntentCategorySchema,
     categories: z.array(IntentCategorySchema).max(5).optional(),
+    taskType: TaskTypeSchema.optional(),
+    domain: z.string().max(120).optional(),
+    entities: z.array(z.string().max(120)).max(20).optional(),
+    ambiguity: z.enum(["low", "medium", "high"]).optional(),
+    clarifyingQuestion: z.string().max(320).optional(),
+    provisionalInterpretation: z.string().max(400).optional(),
     summary: z.string().min(1).max(320),
     timeSensitivity: z.enum(["high", "medium", "low"]),
     timeReason: z.string().min(1).max(320),
@@ -225,6 +277,7 @@ export const ResearchResultSchema = z.object({
   limitations: z.array(z.string().min(1).max(320)).max(12),
 });
 
+export type TaskType = z.infer<typeof TaskTypeSchema>;
 export type IntentCategory = z.infer<typeof IntentCategorySchema>;
 export type Requirement = z.infer<typeof RequirementSchema>;
 export type DiscoveredSource = z.infer<typeof DiscoveredSourceSchema>;
@@ -238,5 +291,7 @@ export type RequirementCoverage = z.infer<typeof RequirementCoverageSchema>;
 export type PossibleConflict = z.infer<typeof ConflictSchema>;
 export type VerificationTask = z.infer<typeof VerificationTaskSchema>;
 export type FollowUpAction = z.infer<typeof FollowUpActionSchema>;
+export type SearchQueryPlan = z.infer<typeof SearchQueryPlanSchema>;
+export type IntentAnalysis = z.infer<typeof IntentAnalysisSchema>;
 export type ConversationTurn = z.infer<typeof ConversationTurnSchema>;
 export type ResearchResult = z.infer<typeof ResearchResultSchema>;

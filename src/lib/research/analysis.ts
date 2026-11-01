@@ -133,6 +133,7 @@ function reasonForStatus(status: CoverageStatus): string {
     case "covered":
       return "Direct supporting excerpts were found in the reviewed sources.";
     case "partial":
+    case "partially_covered":
       return "Some related text was found, but key specifics or complete criteria were not found in reviewed sources.";
     case "missing_in_reviewed_sources":
       return "Not found in the sources reviewed. This means reviewed sources did not contain this information, not that it does not exist.";
@@ -140,6 +141,8 @@ function reasonForStatus(status: CoverageStatus): string {
       return "Reviewed sources provide conflicting or divergent statements for this requirement. Check against an authoritative primary source.";
     case "needs_verification":
       return "Evidence was located, but its applicability period, version, or conditions require confirmation.";
+    case "not_applicable":
+      return "This requirement does not apply to the specific context or scope of this query.";
   }
 }
 
@@ -148,7 +151,7 @@ function classifyCoverage(
   claims: EvidenceClaim[],
   conflicts: PossibleConflict[],
 ): RequirementCoverage {
-  const evidence = claims.filter((claim) => claim.requirementIds.includes(requirement.id));
+  const evidence = claims.filter((claim) => Array.isArray(claim.requirementIds) && claim.requirementIds.includes(requirement.id));
   const conflict = conflicts.some((item) => item.requirementId === requirement.id);
   let status: CoverageStatus;
 
@@ -275,6 +278,12 @@ export function buildResearchResult(input: {
         query: input.query,
         topic: intent.topic,
         category: intent.category,
+        taskType: intent.taskType,
+        domain: intent.domain,
+        entities: intent.entities,
+        ambiguity: intent.ambiguity,
+        clarifyingQuestion: intent.clarifyingQuestion,
+        provisionalInterpretation: intent.provisionalInterpretation,
         sources: input.sources,
         claims: input.claims,
       });
@@ -282,7 +291,7 @@ export function buildResearchResult(input: {
   const priorityOrder = { high: 0, medium: 1, low: 2 } as const;
   const tasks: VerificationTask[] = coverage
     .flatMap((item) => {
-      if (item.status === "covered") return [];
+      if (item.status === "covered" || item.status === "not_applicable") return [];
       const requirement = input.requirements.find((candidate) => candidate.id === item.requirementId);
       if (!requirement) return [];
       const prioritized = priorityFor(requirement, item.status, intent.timeSensitivity);
@@ -333,6 +342,12 @@ export function buildResearchResult(input: {
     intent: {
       category: intent.category,
       categories: intent.categories,
+      taskType: intent.taskType,
+      domain: intent.domain,
+      entities: intent.entities,
+      ambiguity: intent.ambiguity,
+      clarifyingQuestion: intent.clarifyingQuestion,
+      provisionalInterpretation: intent.provisionalInterpretation,
       summary: input.query,
       timeSensitivity: intent.timeSensitivity,
       timeReason: intent.timeReason,

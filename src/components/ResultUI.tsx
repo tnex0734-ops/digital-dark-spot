@@ -80,13 +80,16 @@ function formatDate(value: string | null | undefined): string {
 }
 
 function statusLabel(status: CoverageStatus): string {
-  return {
+  const map: Record<CoverageStatus, string> = {
     covered: "Covered",
     partial: "Partially covered",
+    partially_covered: "Partially covered",
     missing_in_reviewed_sources: "Not found in reviewed sources",
     conflicting: "Possible conflict",
     needs_verification: "Needs verification",
-  }[status];
+    not_applicable: "Not applicable",
+  };
+  return map[status] || "Needs verification";
 }
 
 function coverageFor(result: ResearchResult, id: string) {
@@ -322,6 +325,24 @@ function ResearchSummary({ result }: RegistryProps) {
             appropriately qualified professional. This application organizes source evidence; it does
             not provide professional advice.
           </p>
+        </div>
+      )}
+      {result.intent.ambiguity === "high" && (
+        <div className="ambiguity-alert-banner" role="alert">
+          <div className="ambiguity-icon-box">
+            <AlertTriangle size={18} aria-hidden="true" />
+          </div>
+          <div className="ambiguity-content">
+            <strong>Broad or Ambiguous Query Detected</strong>
+            {result.intent.provisionalInterpretation && (
+              <p className="provisional-text">{result.intent.provisionalInterpretation}</p>
+            )}
+            {result.intent.clarifyingQuestion && (
+              <p className="clarifying-text">
+                <em>Clarifying Question:</em> {result.intent.clarifyingQuestion}
+              </p>
+            )}
+          </div>
         </div>
       )}
     </section>

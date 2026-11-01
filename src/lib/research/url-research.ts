@@ -287,7 +287,12 @@ function fold(value: string): string {
   return value.toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 }
 
-export function makeClaims(sourceId: string, sentences: string[], requirements: Requirement[]): EvidenceClaim[] {
+export function makeClaims(
+  sourceId: string,
+  sentences: string[],
+  requirements: Requirement[],
+  provenance: "page_excerpt" | "search_snippet" | "user_provided" | "demo_fixture" = "page_excerpt",
+): EvidenceClaim[] {
   const seen = new Set<string>();
   const matches: EvidenceClaim[] = [];
   for (const sentence of sentences) {
@@ -304,7 +309,9 @@ export function makeClaims(sourceId: string, sentences: string[], requirements: 
     const requirementIds = matchedRequirements.map((r) => r.id);
 
     // Extract structured claim properties where possible
-    let subject: string | undefined;
+    const primaryReq = matchedRequirements[0];
+    const attribute = primaryReq ? primaryReq.title : undefined;
+    const subject = primaryReq?.title.split(/[:–-]/)[0]?.trim() || "Observed Topic";
     let value: string | undefined;
     let unit: string | undefined;
     let period: string | undefined;
@@ -321,9 +328,6 @@ export function makeClaims(sourceId: string, sentences: string[], requirements: 
       else if (valMatch[1].includes("%") || valMatch[1].toLowerCase().includes("percent")) unit = "percentage";
     }
 
-    const primaryReq = matchedRequirements[0];
-    const attribute = primaryReq ? primaryReq.title : undefined;
-
     matches.push({
       id: `claim-${sourceId}-${matches.length + 1}`,
       sourceId,
@@ -332,6 +336,9 @@ export function makeClaims(sourceId: string, sentences: string[], requirements: 
       excerpt: sentence.slice(0, 1200),
       method: "keyword-match",
       directness: bestCount > 1 ? "direct" : "partial",
+      evidenceProvenance: provenance,
+      supportStatus: bestCount > 1 ? "supported" : "partial",
+      retrievedAt: new Date().toISOString(),
       subject,
       attribute,
       value,
@@ -383,7 +390,12 @@ export async function reviewUrls(
       const id = `source-${index + 1}`;
       try {
         const { inputUrl, page } = await fetchPublicHtml(urls[index]);
-        const foundClaims = makeClaims(id, page.sentences, requirements);
+        const foundClaims = makeClaims(
+          id,
+          page.sentences,
+          requirements,
+          origin === "user-provided" ? "user_provided" : "page_excerpt",
+        );
         claims.push(...foundClaims);
         const readable = page.text.length >= 40;
         const title = page.title.toLowerCase() === inputUrl.hostname.toLowerCase() ? options.titles?.[index] ?? page.title : page.title;

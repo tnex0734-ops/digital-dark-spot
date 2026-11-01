@@ -78,6 +78,7 @@ export async function POST(request: NextRequest) {
       requirements: input.data.requirements,
       manualUrls: manualUrls.length ? manualUrls : undefined,
       acceptLanguage: request.headers.get("accept-language"),
+      previousContext: input.data.previousContext,
     });
 
     return NextResponse.json(result, { headers: { "Cache-Control": "no-store" } });

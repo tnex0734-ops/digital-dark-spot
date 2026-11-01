@@ -59,14 +59,23 @@ export function fallbackPlan(): UIPlan {
 
 export function buildUIPlan(result: ResearchResult): UIPlan {
   const category = result.intent.category;
+  const taskType = result.intent.taskType;
+  const domain = result.intent.domain;
+
+  const isScholarship =
+    category === "scholarship" ||
+    domain === "scholarship_and_aid" ||
+    (category === "application_or_eligibility" && (!domain || domain === "scholarship_and_aid")) ||
+    category === "eligibility";
+
   const layout =
-    category === "scholarship" || category === "application_or_eligibility" || category === "eligibility"
+    isScholarship
       ? "scholarship"
-      : category === "comparison"
+      : taskType === "comparison" || category === "comparison"
         ? "comparison"
-        : category === "academic" || category === "research_question"
+        : taskType === "academic_research" || category === "academic" || category === "research_question"
           ? "academic"
-          : category === "policy" || category === "high_impact_information"
+          : taskType === "policy_or_regulation" || domain === "immigration_and_visa" || category === "policy" || category === "high_impact_information"
             ? "policy"
             : "research";
 
@@ -77,14 +86,17 @@ export function buildUIPlan(result: ResearchResult): UIPlan {
     components.push({ type: "DirectAnswer", dataIds: ["answer"] });
   }
 
-  // 2. Intent-specific code block or comparison table
+  // 2. Intent-specific structured presentation (steps, comparisons, code, pros/cons)
+  if (result.answer?.steps && result.answer.steps.length > 0 && layout !== "scholarship") {
+    components.push({ type: "StepByStepGuide", dataIds: ["steps"] });
+  }
+  if (result.answer?.comparisonRows && result.answer.comparisonRows.length > 0 && layout !== "scholarship") {
+    components.push({ type: "ComparisonTable", dataIds: ["comparison"] });
+  }
   if (result.answer?.code) {
     components.push({ type: "CodeBlock", dataIds: ["code"] });
-  } else if (result.answer?.comparisonRows && result.answer.comparisonRows.length > 0 && layout !== "scholarship") {
-    components.push({ type: "ComparisonTable", dataIds: ["comparison"] });
-  } else if (result.answer?.steps && result.answer.steps.length > 0 && layout !== "scholarship") {
-    components.push({ type: "StepByStepGuide", dataIds: ["steps"] });
-  } else if (result.answer?.prosCons && layout !== "scholarship") {
+  }
+  if (result.answer?.prosCons && layout !== "scholarship") {
     components.push({ type: "ProsConsPanel", dataIds: ["proscons"] });
   }
 

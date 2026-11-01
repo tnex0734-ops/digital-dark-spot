@@ -156,6 +156,12 @@ button { color: inherit; }
 .high-stakes-note { display: flex; align-items: start; gap: 11px; margin: 18px 0; padding: 14px 16px; border: 1px solid #e8d59a; border-radius: var(--radius-md); background: var(--warning-soft); color: #593d00; }
 .high-stakes-note > svg { flex: none; margin-top: 2px; }
 .high-stakes-note p { margin: 0; font-size: 14px; line-height: 1.55; }
+.ambiguity-alert-banner { display: flex; align-items: start; gap: 13px; margin: 18px 0; padding: 16px 18px; border: 1px solid #d2c4f5; border-radius: var(--radius-md); background: #f6f3fe; color: #402c77; }
+.ambiguity-icon-box { width: 32px; height: 32px; display: grid; flex: none; place-items: center; border-radius: 8px; background: #eae2fc; color: #52349e; }
+.ambiguity-content { display: grid; gap: 6px; }
+.ambiguity-content strong { font-size: 15px; font-weight: 700; color: #2e1e5b; }
+.ambiguity-content .provisional-text { margin: 0; font-size: 14px; line-height: 1.5; color: #43336d; }
+.ambiguity-content .clarifying-text { margin: 0; font-size: 13.5px; line-height: 1.5; color: #5a488c; }
 .intent-form { margin-top: 26px; }
 .intent-section { margin: 28px 0 33px; padding: 24px; border: 1px solid var(--line); border-radius: var(--radius-xl); background: var(--surface); }
 .section-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 13px; }
