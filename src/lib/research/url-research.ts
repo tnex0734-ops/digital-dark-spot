@@ -1,11 +1,12 @@
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
 import https, { type RequestOptions } from "node:https";
+import zlib from "node:zlib";
 import { parse } from "node-html-parser";
 import type { LookupFunction } from "node:net";
 import type { EvidenceClaim, Requirement, Source } from "./schema";
 
-export const MAX_URLS = 3;
+export const MAX_URLS = 8;
 export const MAX_HTML_BYTES = 1_000_000;
 export const MAX_PAGE_MILLISECONDS = 4_500;
 const MAX_REDIRECTS = 2;
@@ -25,7 +26,7 @@ function isPublicV4(address: string): boolean {
   if (a === 100 && b >= 64 && b <= 127) return false;
   if (a === 169 && b === 254) return false;
   if (a === 172 && b >= 16 && b <= 31) return false;
-  if (a === 192 && (b === 0 || (b === 88 && c === 99) || (b === 168)) ) return false;
+  if (a === 192 && (b === 0 || (b === 88 && c === 99) || (b === 168))) return false;
   if (a === 192 && b === 0 && c === 2) return false;
   if (a === 198 && (b === 18 || b === 19 || (b === 51 && c === 100))) return false;
   if (a === 203 && b === 0 && c === 113) return false;
@@ -148,8 +149,8 @@ function requestPinned(url: URL, address: AddressRecord, timeoutMs: number): Pro
       path: `${url.pathname || "/"}${url.search}`,
       headers: {
         Accept: "text/html,application/xhtml+xml;q=0.9",
-        "Accept-Encoding": "identity",
-        "User-Agent": "DigitalDarkSpot/0.1 (user-requested page review)",
+        "Accept-Encoding": "gzip, deflate, br, identity",
+        "User-Agent": "DigitalDarkSpot/1.0 (Autonomous research evidence extraction)",
         Connection: "close",
       },
     };
@@ -160,7 +161,7 @@ function requestPinned(url: URL, address: AddressRecord, timeoutMs: number): Pro
       const location = response.headers.location;
       const length = Number(response.headers["content-length"] ?? 0);
       response.on("error", (error) => settle(error));
-      if ([301, 302, 303, 307, 308].includes(status) || status !== 200 || contentType !== "text/html" || (encoding !== "identity" && encoding !== "")) {
+      if ([301, 302, 303, 307, 308].includes(status) || status !== 200 || (contentType !== "text/html" && contentType !== "application/xhtml+xml")) {
         response.destroy();
         settle({ status, contentType, encoding, location, body: Buffer.alloc(0) });
         return;
@@ -182,7 +183,18 @@ function requestPinned(url: URL, address: AddressRecord, timeoutMs: number): Pro
         }
         chunks.push(buffer);
       });
-      response.on("end", () => settle({ status, contentType, encoding, location, body: Buffer.concat(chunks) }));
+      response.on("end", () => {
+        const rawBody = Buffer.concat(chunks);
+        let decompressedBody = rawBody;
+        try {
+          if (encoding === "gzip") decompressedBody = zlib.gunzipSync(rawBody);
+          else if (encoding === "deflate") decompressedBody = zlib.inflateSync(rawBody);
+          else if (encoding === "br") decompressedBody = zlib.brotliDecompressSync(rawBody);
+        } catch {
+          // If decompression fails, fall back to raw or fail
+        }
+        settle({ status, contentType, encoding, location, body: decompressedBody });
+      });
     });
     requestHolder.current = request;
     request.on("error", (error) => settle(error));
@@ -190,7 +202,7 @@ function requestPinned(url: URL, address: AddressRecord, timeoutMs: number): Pro
   });
 }
 
-interface ExtractedPage {
+export interface ExtractedPage {
   title: string;
   headings: string[];
   text: string;
@@ -229,7 +241,7 @@ function extractPage(html: string, url: URL): ExtractedPage {
   return { title, headings, text, sentences, published: safeDate(publishedMeta ?? publishedTime), modified: safeDate(modifiedMeta) };
 }
 
-interface FetchedPage {
+export interface FetchedPage {
   inputUrl: URL;
   page: ExtractedPage;
 }
@@ -261,8 +273,8 @@ export async function fetchPublicHtml(input: string): Promise<FetchedPage> {
     }
     if (response.status === 401 || response.status === 403) throw new PublicFetchError("blocked", "The page declined the server request.");
     if (response.status !== 200) throw new PublicFetchError("unsupported", `The page returned HTTP ${response.status || "an unknown status"}.`);
-    if (response.contentType !== "text/html" || (response.encoding !== "identity" && response.encoding !== "")) {
-      throw new PublicFetchError("unsupported", "Only uncompressed text/html pages can be reviewed.");
+    if (response.contentType !== "text/html" && response.contentType !== "application/xhtml+xml") {
+      throw new PublicFetchError("unsupported", "Only text/html pages can be reviewed.");
     }
     const page = extractPage(response.body.toString("utf8"), current);
     if (page.text.length < 40) throw new PublicFetchError("empty", "No readable page text was found.");
@@ -275,7 +287,7 @@ function fold(value: string): string {
   return value.toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 }
 
-function makeClaims(sourceId: string, sentences: string[], requirements: Requirement[]): EvidenceClaim[] {
+export function makeClaims(sourceId: string, sentences: string[], requirements: Requirement[]): EvidenceClaim[] {
   const seen = new Set<string>();
   const matches: EvidenceClaim[] = [];
   for (const sentence of sentences) {
@@ -288,35 +300,82 @@ function makeClaims(sourceId: string, sentences: string[], requirements: Require
     if (!found.length) continue;
     seen.add(normalized);
     const bestCount = Math.max(...found.map((item) => item.count));
-    const requirementIds = found.filter((item) => item.count === bestCount).map((item) => item.requirement.id);
+    const matchedRequirements = found.filter((item) => item.count === bestCount).map((item) => item.requirement);
+    const requirementIds = matchedRequirements.map((r) => r.id);
+
+    // Extract structured claim properties where possible
+    let subject: string | undefined;
+    let value: string | undefined;
+    let unit: string | undefined;
+    let period: string | undefined;
+
+    // Detect period (e.g. 2024-25, 2026, 2026-2027)
+    const periodMatch = sentence.match(/\b(202\d(?:[–-](?:20)?2\d)?)\b/);
+    if (periodMatch) period = periodMatch[1];
+
+    // Detect currency / numerical value
+    const valMatch = sentence.match(/(\$\s?[\d,]+(?:\.\d+)?|\b\d+(?:,\d+)*(?:\.\d+)?\s?(?:percent|%|hours|credits|months|days|years|USD|EUR|GBP|INR|Wh\/kg|mAh|Hz|mAh\/g)\b)/i);
+    if (valMatch) {
+      value = valMatch[1].trim();
+      if (valMatch[1].startsWith("$")) unit = "currency";
+      else if (valMatch[1].includes("%") || valMatch[1].toLowerCase().includes("percent")) unit = "percentage";
+    }
+
+    const primaryReq = matchedRequirements[0];
+    const attribute = primaryReq ? primaryReq.title : undefined;
+
     matches.push({
       id: `claim-${sourceId}-${matches.length + 1}`,
       sourceId,
       requirementIds,
-      statement: `Page text matched ${found.map((item) => item.requirement.title).join(", ")}. A text match does not establish the meaning or accuracy of the statement.`,
+      statement: `Page text matched: ${matchedRequirements.map((item) => item.title).join(", ")}. A text match does not establish guaranteed truth.`,
       excerpt: sentence.slice(0, 1200),
       method: "keyword-match",
       directness: bestCount > 1 ? "direct" : "partial",
+      subject,
+      attribute,
+      value,
+      unit,
+      period,
     });
     if (matches.length >= 40) break;
   }
   return matches;
 }
 
-function authoritySignal(hostname: string): string {
-  return /\.(gov|edu)(\.[a-z]{2,})?$/i.test(hostname)
-    ? "Government or education domain suffix signal only; not verified"
-    : "Authority not assessed; URL was supplied by the user";
+export function authoritySignal(hostname: string, origin: Source["origin"] = "user-provided"): string {
+  const host = hostname.toLowerCase();
+  if (/\.(gov|mil)(\.[a-z]{2,})?$/i.test(host)) {
+    return "Official public sector / government domain (.gov)";
+  }
+  if (/\.edu(\.[a-z]{2,})?$/i.test(host) || /\.ac\.[a-z]{2,}$/i.test(host)) {
+    return "Accredited educational / academic domain (.edu)";
+  }
+  if (host === "en.wikipedia.org" || host.endsWith(".wikipedia.org")) {
+    return "Open reference encyclopedia (Wikimedia Foundation)";
+  }
+  if (host.includes("doi.org") || host.includes("openalex.org") || host.includes("nature.com") || host.includes("sciencedirect.com") || host.includes("ieee.org") || host.includes("nih.gov")) {
+    return "Academic literature or scientific publisher repository";
+  }
+  if (origin === "automatic-search") {
+    return "Discovered via public search ranking; authority unverified";
+  }
+  return "Supplied URL; domain authority not assessed";
 }
 
-export async function reviewUrls(urls: string[], requirements: Requirement[]): Promise<{ sources: Source[]; claims: EvidenceClaim[] }> {
+export async function reviewUrls(
+  urls: string[],
+  requirements: Requirement[],
+  options: { origin?: Exclude<Source["origin"], "illustrative">; titles?: string[] } = {},
+): Promise<{ sources: Source[]; claims: EvidenceClaim[] }> {
   if (!Array.isArray(urls) || urls.length < 1 || urls.length > MAX_URLS) {
-    throw new PublicFetchError("invalid_url", "Add one to three public HTTPS page URLs.");
+    throw new PublicFetchError("invalid_url", `Add between one and ${MAX_URLS} public HTTPS page URLs.`);
   }
+  const origin = options.origin ?? "user-provided";
   const sources: Source[] = new Array(urls.length);
   const claims: EvidenceClaim[] = [];
   let nextIndex = 0;
-  const workers = Array.from({ length: Math.min(2, urls.length) }, async () => {
+  const workers = Array.from({ length: Math.min(3, urls.length) }, async () => {
     while (nextIndex < urls.length) {
       const index = nextIndex;
       nextIndex += 1;
@@ -327,16 +386,17 @@ export async function reviewUrls(urls: string[], requirements: Requirement[]): P
         const foundClaims = makeClaims(id, page.sentences, requirements);
         claims.push(...foundClaims);
         const readable = page.text.length >= 40;
+        const title = page.title.toLowerCase() === inputUrl.hostname.toLowerCase() ? options.titles?.[index] ?? page.title : page.title;
         sources[index] = {
           id,
-          title: page.title,
+          title: title.slice(0, 240),
           domain: inputUrl.hostname,
           url: inputUrl.toString(),
-          origin: "user-provided",
+          origin,
           status: readable ? "reviewed" : "empty",
           headings: page.headings,
-          authoritySignal: authoritySignal(inputUrl.hostname),
-          retrievalNote: "Requested by you from this server. Page text is untrusted data and was not executed.",
+          authoritySignal: authoritySignal(inputUrl.hostname, origin),
+          retrievalNote: `${origin === "automatic-search" ? "Discovered by autonomous search and fetched server-side" : "Requested by you from this server"}. Untrusted HTML parsed safely.`,
           dates: { published: page.published, modified: page.modified, retrieved, validFrom: null, validTo: null },
         };
       } catch (error) {
@@ -345,15 +405,15 @@ export async function reviewUrls(urls: string[], requirements: Requirement[]): P
         try { submittedHost = new URL(urls[index]).hostname; } catch { /* Keep invalid URLs out of error details. */ }
         sources[index] = {
           id,
-          title: submittedHost,
+          title: (options.titles?.[index] ?? submittedHost).slice(0, 240),
           domain: submittedHost,
           url: null,
-          origin: "user-provided",
+          origin,
           status: failure.code === "timeout" ? "timeout" : failure.code === "unsupported" ? "unsupported" : failure.code === "empty" ? "empty" : "blocked",
           error: failure.message,
           headings: [],
           authoritySignal: "Not assessed",
-          retrievalNote: "No page text was accepted.",
+          retrievalNote: `${origin === "automatic-search" ? "Discovered by web search" : "Submitted URL"}; no page text was accepted.`,
           dates: { published: null, modified: null, retrieved, validFrom: null, validTo: null },
         };
       }

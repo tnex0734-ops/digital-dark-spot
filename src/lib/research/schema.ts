@@ -5,6 +5,7 @@ export const IntentCategorySchema = z.enum([
   "eligibility",
   "policy",
   "comparison",
+  "academic",
   "general",
 ]);
 
@@ -15,16 +16,30 @@ export const RequirementSchema = z.object({
   sourceType: z.string().min(1).max(120),
   keywords: z.array(z.string().min(1).max(80)).max(12),
   impact: z.number().int().min(1).max(3),
+  timeSensitivity: z.enum(["high", "medium", "low"]).optional(),
+  searchIntent: z.string().max(240).optional(),
   expectedPeriod: z.string().max(80).optional(),
+});
+
+export const DiscoveredSourceSchema = z.object({
+  id: z.string().min(1).max(80),
+  title: z.string().min(1).max(300),
+  url: z.string().url().max(2048),
+  domain: z.string().min(1).max(180),
+  snippet: z.string().max(2000).optional(),
+  publishedDate: z.string().nullable().optional(),
+  provider: z.string().min(1).max(80),
+  query: z.string().min(1).max(400).optional(),
+  selectedForReview: z.boolean(),
 });
 
 export const SourceSchema = z.object({
   id: z.string().min(1).max(80),
-  title: z.string().min(1).max(240),
+  title: z.string().min(1).max(300),
   domain: z.string().min(1).max(180),
   url: z.string().url().max(2048).nullable(),
-  origin: z.enum(["illustrative", "user-provided"]),
-  status: z.enum(["reviewed", "blocked", "timeout", "unsupported", "empty"]),
+  origin: z.enum(["illustrative", "user-provided", "automatic-search"]),
+  status: z.enum(["reviewed", "blocked", "timeout", "unsupported", "empty", "not_reviewed"]),
   error: z.string().max(320).optional(),
   headings: z.array(z.string().min(1).max(200)).max(40),
   authoritySignal: z.string().min(1).max(180),
@@ -36,6 +51,14 @@ export const SourceSchema = z.object({
     validFrom: z.string().datetime({ offset: true }).nullable(),
     validTo: z.string().datetime({ offset: true }).nullable(),
   }),
+});
+
+export const SearchSummarySchema = z.object({
+  provider: z.string().min(1).max(120),
+  query: z.string().min(1).max(600),
+  queries: z.array(z.string().min(1).max(400)).max(10).optional(),
+  resultsFound: z.number().int().min(0).max(100),
+  pagesSelected: z.number().int().min(0).max(20),
 });
 
 export const ClaimSchema = z.object({
@@ -88,10 +111,20 @@ export const VerificationTaskSchema = z.object({
   priorityReason: z.string().min(1).max(320),
 });
 
+export const FollowUpActionSchema = z.object({
+  id: z.string().min(1).max(80),
+  title: z.string().min(1).max(160),
+  description: z.string().min(1).max(320),
+  targetRequirementId: z.string().min(1).max(80),
+  suggestedQuery: z.string().min(1).max(300),
+});
+
 export const ResearchResultSchema = z.object({
   version: z.literal(1),
-  mode: z.enum(["demo", "url"]),
+  mode: z.enum(["demo", "web-search", "url"]),
   query: z.string().min(1).max(2000),
+  createdAt: z.string().datetime({ offset: true }).optional(),
+  search: SearchSummarySchema.optional(),
   intent: z.object({
     category: IntentCategorySchema,
     summary: z.string().min(1).max(320),
@@ -100,28 +133,34 @@ export const ResearchResultSchema = z.object({
     highStakes: z.boolean(),
   }),
   requirements: z.array(RequirementSchema).max(12),
-  sources: z.array(SourceSchema).max(3),
+  discoveredSources: z.array(DiscoveredSourceSchema).max(50).optional(),
+  discoveredSourceCount: z.number().int().min(0).max(100).optional(),
+  sources: z.array(SourceSchema).max(50),
   claims: z.array(ClaimSchema).max(120),
   coverage: z.array(RequirementCoverageSchema).max(12),
   conflicts: z.array(ConflictSchema).max(40),
   tasks: z.array(VerificationTaskSchema).max(12),
+  followUpActions: z.array(FollowUpActionSchema).max(12).optional(),
   evidenceCoverage: z.object({
     withEvidence: z.number().int().min(0),
     denominator: z.number().int().min(0),
     percentage: z.number().int().min(0).max(100),
     caveat: z.string().min(1).max(320),
   }),
-  reviewedSourceCount: z.number().int().min(0).max(3),
+  reviewedSourceCount: z.number().int().min(0).max(50),
   status: z.enum(["complete", "partial", "blocked"]),
-  limitations: z.array(z.string().min(1).max(320)).max(8),
+  limitations: z.array(z.string().min(1).max(320)).max(12),
 });
 
 export type IntentCategory = z.infer<typeof IntentCategorySchema>;
 export type Requirement = z.infer<typeof RequirementSchema>;
+export type DiscoveredSource = z.infer<typeof DiscoveredSourceSchema>;
 export type Source = z.infer<typeof SourceSchema>;
+export type SearchSummary = z.infer<typeof SearchSummarySchema>;
 export type EvidenceClaim = z.infer<typeof ClaimSchema>;
 export type CoverageStatus = z.infer<typeof CoverageStatusSchema>;
 export type RequirementCoverage = z.infer<typeof RequirementCoverageSchema>;
 export type PossibleConflict = z.infer<typeof ConflictSchema>;
 export type VerificationTask = z.infer<typeof VerificationTaskSchema>;
+export type FollowUpAction = z.infer<typeof FollowUpActionSchema>;
 export type ResearchResult = z.infer<typeof ResearchResultSchema>;

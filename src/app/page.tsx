@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, Check, FileText, Link2 } from "lucide-react";
+import { ArrowRight, Check, FileText, Sparkles } from "lucide-react";
 import { LandingComposer } from "@/components/LandingComposer";
 
 function EvidenceIllustration() {
@@ -29,7 +29,7 @@ function EvidenceIllustration() {
         <path d="M235 171h30m-15-15v30" stroke="#20221f" strokeWidth="2" strokeLinecap="round" />
         <circle cx="250" cy="170" r="5" fill="#20221f" />
       </svg>
-      <div className="illustration-caption"><span className="caption-mark" />Connect the question to the evidence</div>
+      <div className="illustration-caption"><span className="caption-mark" />Question to evidence, at a glance</div>
     </div>
   );
 }
@@ -39,12 +39,14 @@ export default function Home() {
     <div className="landing-page">
       <section className="landing-hero">
         <div className="hero-copy">
-          <div className="eyebrow"><span className="eyebrow-rule" />A clearer view of what you know</div>
+          <div className="eyebrow"><span className="eyebrow-rule" />Autonomous Evidence & Gap Intelligence</div>
           <h1>Find what’s missing before you decide.</h1>
-          <p className="hero-description">Bring a question and a few pages. We’ll map the requirements to evidence, flag open questions and help you decide what to verify next.</p>
+          <p className="hero-description">
+            Enter a research question. We’ll automatically discover relevant sources, examine the evidence, flag contradictions and expired cycles, and render an intent-specific Generative UI workspace.
+          </p>
           <div className="hero-points">
-            <span><Check size={16} aria-hidden="true" />Evidence stays traceable</span>
-            <span><Check size={16} aria-hidden="true" />Gaps stay clearly scoped</span>
+            <span><Check size={16} aria-hidden="true" />Autonomous discovery without mandatory URLs</span>
+            <span><Check size={16} aria-hidden="true" />Evidence stays traceable with exact excerpts</span>
           </div>
         </div>
         <EvidenceIllustration />
@@ -52,19 +54,46 @@ export default function Home() {
 
       <LandingComposer />
 
-      <section className="how-strip" aria-label="How a review works">
-        <div><span className="step-number">01</span><div><strong>Set the question</strong><p>Review the requirements before you begin.</p></div></div>
-        <div><span className="step-number">02</span><div><strong>Choose a few pages</strong><p>We review only the public URLs you provide.</p></div></div>
-        <div><span className="step-number">03</span><div><strong>See what to check</strong><p>Inspect excerpts, gaps and next steps.</p></div></div>
+      <section className="how-strip" aria-label="How autonomous research works">
+        <div>
+          <span className="step-number">01</span>
+          <div>
+            <strong>Ask a question</strong>
+            <p>We infer requirements and generate targeted discovery queries.</p>
+          </div>
+        </div>
+        <div>
+          <span className="step-number">02</span>
+          <div>
+            <strong>Autonomous discovery</strong>
+            <p>Candidate sources are ranked, selected, and parsed server-side.</p>
+          </div>
+        </div>
+        <div>
+          <span className="step-number">03</span>
+          <div>
+            <strong>Adaptive workspace</strong>
+            <p>Review coverage matrix, conflicts, freshness timeline, and checklist.</p>
+          </div>
+        </div>
       </section>
 
       <section className="demo-promo">
         <div className="promo-icon"><FileText size={21} aria-hidden="true" /></div>
-        <div className="promo-copy"><span className="eyebrow">Prefer to look around first?</span><h2>Explore a complete scholarship review.</h2><p>See a synthetic example with an older deadline, a document conflict and unanswered requirements.</p></div>
+        <div className="promo-copy">
+          <span className="eyebrow">Zero-Network Standalone Demo</span>
+          <h2>Explore the scholarship research demo.</h2>
+          <p>
+            Experience a complete offline-ready scholarship review featuring an older-cycle deadline, a document contradiction, and prioritized verification tasks.
+          </p>
+        </div>
         <Link href="/demo" className="button button-dark">Open the demo <ArrowRight size={17} aria-hidden="true" /></Link>
       </section>
 
-      <div className="landing-footnote"><Link2 size={15} aria-hidden="true" />A small, user-selected source set. No internet-wide search or live AI model.</div>
+      <div className="landing-footnote">
+        <Sparkles size={15} aria-hidden="true" />
+        Zero-configuration Vercel deployment. No user accounts, local runtime, or API keys required.
+      </div>
     </div>
   );
 }

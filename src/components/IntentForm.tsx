@@ -3,10 +3,10 @@
 import { useEffect, useMemo, useState, useSyncExternalStore, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { AlertTriangle, ArrowLeft, ArrowRight, Plus, Trash2 } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ArrowRight, ChevronDown, ChevronUp, Link2, Plus, Trash2 } from "lucide-react";
 import { inferIntent } from "@/lib/research/intent";
-import { ResearchResultSchema } from "@/lib/research/schema";
 import { QUESTION_STORAGE_KEY, RESULT_STORAGE_KEY } from "@/lib/research/storage-keys";
+import { MANUAL_URLS_STORAGE_KEY } from "./LandingComposer";
 
 function subscribeQuestion(onChange: () => void) {
   window.addEventListener("storage", onChange);
@@ -14,17 +14,25 @@ function subscribeQuestion(onChange: () => void) {
 }
 
 function readQuestion(): string {
-  try { return sessionStorage.getItem(QUESTION_STORAGE_KEY) ?? ""; } catch { return ""; }
+  try {
+    return sessionStorage.getItem(QUESTION_STORAGE_KEY) ?? "";
+  } catch {
+    return "";
+  }
 }
 
 export function IntentForm() {
   const question = useSyncExternalStore<string | null>(subscribeQuestion, readQuestion, () => null);
   const [editedLabels, setEditedLabels] = useState<string[] | null>(null);
-  const [urls, setUrls] = useState([""]);
+  const [urls, setUrls] = useState<string[]>([]);
+  const [showUrls, setShowUrls] = useState(false);
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
   const router = useRouter();
-  const suggestion = useMemo(() => inferIntent(question ?? "general research"), [question]);
+
+  const suggestion = useMemo(
+    () => inferIntent(question || "What should I verify before applying for a scholarship?"),
+    [question],
+  );
   const labels = editedLabels ?? suggestion.requirements.map((item) => item.title);
 
   useEffect(() => {
@@ -32,95 +40,174 @@ export function IntentForm() {
   }, [question, router]);
 
   function updateLabel(index: number, value: string) {
-    setEditedLabels((current) => (current ?? labels).map((label, labelIndex) => labelIndex === index ? value : label));
+    setEditedLabels((current) =>
+      (current ?? labels).map((label, labelIndex) => (labelIndex === index ? value : label)),
+    );
   }
 
-  function updateUrl(index: number, value: string) {
-    setUrls((current) => current.map((url, urlIndex) => urlIndex === index ? value : url));
+  function addRequirement() {
+    setEditedLabels((current) => [...(current ?? labels), "New requirement to verify"]);
   }
 
-  async function reviewSources(event: FormEvent<HTMLFormElement>) {
+  function startResearchWithScope(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
-    const submittedUrls = urls.map((url) => url.trim()).filter(Boolean);
     const cleanLabels = labels.map((label) => label.trim()).filter(Boolean);
-    if (!cleanLabels.length) { setError("Keep at least one requirement in the review."); return; }
-    if (submittedUrls.length < 1 || submittedUrls.length > 3) { setError("Add between one and three public HTTPS page URLs."); return; }
-    if (submittedUrls.some((url) => !/^https:\/\//i.test(url))) { setError("Only HTTPS page links can be reviewed."); return; }
-    setLoading(true);
+    if (!cleanLabels.length) {
+      setError("Keep at least one information requirement in the review scope.");
+      return;
+    }
+
     try {
-      const response = await fetch("/api/research/analyze", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question: question ?? "", requirements: cleanLabels.slice(0, 12), urls: submittedUrls }),
-      });
-      const data: unknown = await response.json();
-      if (!response.ok) {
-        const message = typeof data === "object" && data !== null && "error" in data && typeof data.error === "string" ? data.error : "The pages could not be reviewed.";
-        throw new Error(message);
+      sessionStorage.removeItem(RESULT_STORAGE_KEY);
+      const cleanUrls = urls.map((u) => u.trim()).filter((u) => u.startsWith("https://"));
+      if (cleanUrls.length > 0) {
+        sessionStorage.setItem(MANUAL_URLS_STORAGE_KEY, JSON.stringify(cleanUrls));
+      } else {
+        sessionStorage.removeItem(MANUAL_URLS_STORAGE_KEY);
       }
-      const parsed = ResearchResultSchema.safeParse(data);
-      if (!parsed.success) throw new Error("The review response could not be checked. Please try again.");
-      sessionStorage.setItem(RESULT_STORAGE_KEY, JSON.stringify(parsed.data));
       router.push("/results");
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "The pages could not be reviewed. Please try again.");
-    } finally {
-      setLoading(false);
+    } catch {
+      setError("Session storage could not be written. Please check browser permissions.");
     }
   }
 
   return (
     <div className="intent-layout">
-      <Link className="back-link" href="/"><ArrowLeft size={16} aria-hidden="true" />Back to research</Link>
+      <Link className="back-link" href="/">
+        <ArrowLeft size={16} aria-hidden="true" /> Back to Research
+      </Link>
       <header className="page-heading">
-        <div className="eyebrow"><span className="eyebrow-rule" />Step one · Review the scope</div>
-        <h1>Make the question reviewable.</h1>
-        <p>We turn your question into a short list of suggested requirements. Edit the list before choosing the pages to inspect.</p>
+        <div className="eyebrow">
+          <span className="eyebrow-rule" /> Scope Configuration · Optional
+        </div>
+        <h1>Review Information Requirements</h1>
+        <p>
+          We derived explicit information requirements from your question. You can adjust them or start research immediately.
+        </p>
       </header>
 
       <section className="question-recap">
-        <span className="eyebrow">Your research question</span>
+        <span className="eyebrow">Your Research Question</span>
         <p>{question === null ? "Loading your question…" : question}</p>
-        <div className="recap-meta"><span className="category-tag">{suggestion.category === "scholarship" ? "Scholarship / application" : suggestion.category}</span><span className={`time-tag time-tag--${suggestion.timeSensitivity}`}>{suggestion.timeSensitivity} time sensitivity</span><span>{suggestion.timeReason}</span></div>
+        <div className="recap-meta">
+          <span className="category-tag">
+            {suggestion.category === "scholarship"
+              ? "Scholarship / application"
+              : suggestion.category}
+          </span>
+          <span className={`time-tag time-tag--${suggestion.timeSensitivity}`}>
+            {suggestion.timeSensitivity} time sensitivity
+          </span>
+          <span>{suggestion.timeReason}</span>
+        </div>
       </section>
 
-      {suggestion.highStakes && <div className="high-stakes-note" role="note"><AlertTriangle size={18} aria-hidden="true" /><p>This question may relate to a high-impact decision. Use official primary sources and an appropriately qualified professional where needed. This app organises information; it does not give professional advice.</p></div>}
-
-      <form className="intent-form" onSubmit={reviewSources}>
-        <section className="intent-section" aria-labelledby="requirements-title">
-          <div className="section-heading"><div><span className="eyebrow">Suggested by a deterministic template</span><h2 id="requirements-title">Requirements to check</h2></div><span className="suggested-note">You can edit these</span></div>
-          <p className="section-intro">Suggestions are based on your wording. They are not official rules. Remove or rewrite anything that does not fit.</p>
-          <div className="requirement-editor-list">
-            {labels.map((label, index) => <div className="requirement-editor" key={`requirement-${index}`}>
-              <label htmlFor={`requirement-${index}`}>Requirement {index + 1}</label>
-              <input id={`requirement-${index}`} value={label} maxLength={160} onChange={(event) => updateLabel(index, event.target.value)} />
-              <button type="button" className="icon-button remove-requirement" onClick={() => setEditedLabels((current) => (current ?? labels).filter((_, itemIndex) => itemIndex !== index))} aria-label={`Remove ${label || `requirement ${index + 1}`}`}><Trash2 size={17} aria-hidden="true" /></button>
-            </div>)}
-          </div>
-          {labels.length < 12 && <button className="text-button add-requirement" type="button" onClick={() => setEditedLabels((current) => [...(current ?? labels), ""])}><Plus size={16} aria-hidden="true" />Add a requirement</button>}
-        </section>
-
-        <section className="intent-section source-entry-section" aria-labelledby="sources-entry-title">
-          <div className="section-heading"><div><span className="eyebrow">Step two · Choose your sources</span><h2 id="sources-entry-title">Add up to three public pages</h2></div><span className="section-count">HTTPS only</span></div>
-          <p className="section-intro">The app server will request these pages. Login-only, blocked, large or script-dependent pages may not work. We do not search other pages for you.</p>
-          <div className="url-editor-list">
-            {urls.map((url, index) => <div className="url-editor" key={`url-${index}`}>
-              <label htmlFor={`source-url-${index}`}>Page URL {index + 1}</label>
-              <input id={`source-url-${index}`} type="url" inputMode="url" autoComplete="url" placeholder="https://example.org/information" value={url} onChange={(event) => updateUrl(index, event.target.value)} />
-              {urls.length > 1 && <button type="button" className="icon-button" onClick={() => setUrls((current) => current.filter((_, itemIndex) => itemIndex !== index))} aria-label={`Remove page URL ${index + 1}`}><Trash2 size={17} aria-hidden="true" /></button>}
-            </div>)}
-          </div>
-          {urls.length < 3 && <button className="text-button add-requirement" type="button" onClick={() => setUrls((current) => [...current, ""])}><Plus size={16} aria-hidden="true" />Add another page</button>}
-          <p className="privacy-inline">No page content is saved on the server. The result stays in this browser tab until you clear it.</p>
-        </section>
-
-        {error && <p className="form-error form-error-box" role="alert">{error}</p>}
-        <div className="intent-submit-row">
-          <span className="field-help">{loading ? "Reviewing the pages you supplied…" : "The review can take a few seconds per page."}</span>
-          <button className="button button-primary" type="submit" disabled={loading || !question}>{loading ? "Reviewing pages…" : "Review these pages"}<ArrowRight size={17} aria-hidden="true" /></button>
+      {suggestion.highStakes && (
+        <div className="high-stakes-note" role="note">
+          <AlertTriangle size={18} aria-hidden="true" />
+          <p>
+            This question may relate to a high-impact decision. Use official primary sources and consult an appropriately qualified professional where needed. This app organizes evidence; it does not give professional advice.
+          </p>
         </div>
-        <p className="intent-demo-hint">Want to explore first? <Link href="/demo">Open the local scholarship demo.</Link></p>
+      )}
+
+      <form className="intent-form" onSubmit={startResearchWithScope}>
+        <section className="intent-section" aria-labelledby="requirements-title">
+          <div className="section-heading">
+            <div>
+              <span className="eyebrow">Intent Blueprint</span>
+              <h2 id="requirements-title">Requirements to verify</h2>
+            </div>
+            <span className="suggested-note">Editable checklist</span>
+          </div>
+          <p className="section-intro">
+            Requirements guide targeted search query generation and claim mapping. Edit or add requirements to tailor discovery.
+          </p>
+          <div className="requirement-editor-list">
+            {labels.map((label, index) => (
+              <div className="requirement-editor" key={`requirement-${index}`}>
+                <label htmlFor={`requirement-${index}`}>Requirement {index + 1}</label>
+                <input
+                  id={`requirement-${index}`}
+                  value={label}
+                  maxLength={160}
+                  onChange={(event) => updateLabel(index, event.target.value)}
+                />
+                <button
+                  type="button"
+                  className="icon-button remove-requirement"
+                  onClick={() =>
+                    setEditedLabels((current) =>
+                      (current ?? labels).filter((_, itemIndex) => itemIndex !== index),
+                    )
+                  }
+                  aria-label={`Remove ${label || `requirement ${index + 1}`}`}
+                >
+                  <Trash2 size={17} aria-hidden="true" />
+                </button>
+              </div>
+            ))}
+          </div>
+          <button
+            type="button"
+            className="button button-quiet add-requirement"
+            onClick={addRequirement}
+          >
+            <Plus size={16} aria-hidden="true" /> Add another requirement
+          </button>
+        </section>
+
+        {/* Optional Manual Sources */}
+        <section className="intent-section">
+          <button
+            type="button"
+            className="accordion-toggle"
+            onClick={() => setShowUrls(!showUrls)}
+            aria-expanded={showUrls}
+          >
+            <Link2 size={16} aria-hidden="true" />
+            <span>Add supplemental URLs (optional)</span>
+            {showUrls ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+          </button>
+          {showUrls && (
+            <div className="accordion-content">
+              <p className="section-intro">
+                You can supply specific HTTPS webpages to supplement autonomous discovery.
+              </p>
+              <div className="url-input-list">
+                {[0, 1, 2].map((idx) => (
+                  <input
+                    key={idx}
+                    type="url"
+                    value={urls[idx] || ""}
+                    onChange={(e) => {
+                      const updated = [...urls];
+                      updated[idx] = e.target.value;
+                      setUrls(updated);
+                    }}
+                    placeholder={`https://example.org/page-${idx + 1}`}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+        </section>
+
+        {error && (
+          <p className="form-error" role="alert">
+            {error}
+          </p>
+        )}
+
+        <div className="intent-actions">
+          <button className="button button-primary" type="submit">
+            Start Autonomous Research <ArrowRight size={17} aria-hidden="true" />
+          </button>
+          <Link className="button button-quiet" href="/">
+            Cancel
+          </Link>
+        </div>
       </form>
     </div>
   );

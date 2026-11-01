@@ -1,68 +1,88 @@
 import { z } from "zod";
 import { NextRequest, NextResponse } from "next/server";
-import { buildResearchResult } from "@/lib/research/analysis";
-import { inferIntent, requirementsFromLabels } from "@/lib/research/intent";
-import { PublicFetchError, reviewUrls } from "@/lib/research/url-research";
-import { ResearchResultSchema } from "@/lib/research/schema";
+import { ResearchOrchestrator } from "@/lib/research/orchestrator";
 
 export const runtime = "nodejs";
-export const maxDuration = 15;
+export const maxDuration = 30;
 
-const InputSchema = z.object({
-  question: z.string().trim().min(8).max(2000),
-  requirements: z.array(z.string().trim().min(1).max(160)).min(1).max(12),
-  urls: z.array(z.string().trim().min(1).max(2048)).min(1).max(3),
-}).strict();
+const InputSchema = z
+  .object({
+    question: z.string().trim().min(8).max(2000),
+    requirements: z.array(z.string().trim().min(1).max(160)).min(1).max(12).optional(),
+    manualUrls: z.array(z.string().trim().min(1).max(2048)).max(5).optional(),
+    urls: z.array(z.string().trim().min(1).max(2048)).max(5).optional(),
+  })
+  .strict();
 
 class BodyTooLargeError extends Error {}
 
-async function readJsonBody(request: NextRequest): Promise<unknown> {
+async function readBoundedBody(request: NextRequest, maxBytes = 32_000): Promise<unknown> {
   const declaredLength = Number(request.headers.get("content-length") ?? 0);
-  if (Number.isFinite(declaredLength) && declaredLength > 16_000) throw new BodyTooLargeError();
-  const reader = request.body?.getReader();
-  if (!reader) throw new SyntaxError("Missing request body.");
+  if (Number.isFinite(declaredLength) && declaredLength > maxBytes) {
+    throw new BodyTooLargeError("Request body exceeds limit");
+  }
+  if (!request.body) return {};
+  const reader = request.body.getReader();
   const chunks: Uint8Array[] = [];
   let size = 0;
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
     size += value.byteLength;
-    if (size > 16_000) {
+    if (size > maxBytes) {
       await reader.cancel();
-      throw new BodyTooLargeError();
+      throw new BodyTooLargeError("Request body exceeds limit");
     }
     chunks.push(value);
   }
-  return JSON.parse(new TextDecoder().decode(Buffer.concat(chunks.map((chunk) => Buffer.from(chunk))))) as unknown;
+  const text = new TextDecoder().decode(Buffer.concat(chunks.map((chunk) => Buffer.from(chunk))));
+  return text ? JSON.parse(text) : {};
 }
 
 export async function POST(request: NextRequest) {
-  const origin = request.headers.get("origin");
-  const fetchSite = request.headers.get("sec-fetch-site");
-  if (fetchSite === "cross-site" || (origin && origin !== new URL(request.url).origin)) {
-    return NextResponse.json({ error: "Cross-origin page review requests are not accepted." }, { status: 403, headers: { "Cache-Control": "no-store" } });
-  }
   let body: unknown;
   try {
-    body = await readJsonBody(request);
+    body = await readBoundedBody(request);
   } catch (error) {
-    const status = error instanceof BodyTooLargeError ? 413 : 400;
-    return NextResponse.json({ error: status === 413 ? "Request is larger than the 16 KB limit." : "Request body must be valid JSON." }, { status, headers: { "Cache-Control": "no-store" } });
+    if (error instanceof BodyTooLargeError) {
+      return NextResponse.json(
+        { error: "The request body was too large." },
+        { status: 413, headers: { "Cache-Control": "no-store" } },
+      );
+    }
+    return NextResponse.json(
+      { error: "The request could not be read." },
+      { status: 400, headers: { "Cache-Control": "no-store" } },
+    );
   }
+
   const input = InputSchema.safeParse(body);
   if (!input.success) {
-    return NextResponse.json({ error: "Add a question, one to three HTTPS page URLs, and at least one requirement." }, { status: 400, headers: { "Cache-Control": "no-store" } });
+    return NextResponse.json(
+      { error: "Please enter a research question with at least 8 characters." },
+      { status: 400, headers: { "Cache-Control": "no-store" } },
+    );
   }
+
   try {
-    const intent = inferIntent(input.data.question);
-    const requirements = requirementsFromLabels(input.data.requirements, intent.category);
-    const { sources, claims } = await reviewUrls(input.data.urls, requirements);
-    const result = ResearchResultSchema.parse(buildResearchResult({ mode: "url", query: input.data.question, requirements, sources, claims }));
+    const orchestrator = new ResearchOrchestrator();
+    const manualUrls = input.data.manualUrls || input.data.urls || [];
+    const result = await orchestrator.run({
+      question: input.data.question,
+      requirements: input.data.requirements,
+      manualUrls: manualUrls.length ? manualUrls : undefined,
+      acceptLanguage: request.headers.get("accept-language"),
+    });
+
     return NextResponse.json(result, { headers: { "Cache-Control": "no-store" } });
-  } catch (error) {
-    if (error instanceof PublicFetchError) {
-      return NextResponse.json({ error: error.message }, { status: 400, headers: { "Cache-Control": "no-store" } });
-    }
-    return NextResponse.json({ error: "The request could not be analyzed. Review your inputs and try again." }, { status: 500, headers: { "Cache-Control": "no-store" } });
+  } catch (error: unknown) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Autonomous research could not be completed. Please try again or provide optional URLs.";
+    return NextResponse.json(
+      { error: message },
+      { status: 502, headers: { "Cache-Control": "no-store" } },
+    );
   }
 }
